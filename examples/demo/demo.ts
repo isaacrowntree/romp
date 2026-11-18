@@ -1,6 +1,7 @@
-/* The romp demo: a wordmark of springy letters, a character flung into it,
- * and a cast dropped into a pile, all baked once in a planck world and read
- * every frame. Live mode plays it on the audio clock with sound; the same
+/* The romp demo: a wordmark of springy letters, a character flung into it
+ * (sparks where it hits), and a cast dropped into a pile, all baked once in a
+ * planck world and read every frame. The shelf brightens on every kick drum,
+ * read from the soundtrack's score (listen), not from a live analyser. Live mode plays it on the audio clock with sound; the same
  * schedule renders offline to a WAV; the motion check steps every frame.
  *
  * Build: `node examples/demo/build.mjs` → examples/demo/dist/romp-demo.js,
@@ -12,7 +13,8 @@ import { analyze, formatReport, type FrameRow } from "../../src/check/analyze.js
 import { collectDom } from "../../src/check/dom.js";
 import { playLive, renderWav, type Schedule } from "../../src/audio/mix.js";
 import { cartoon } from "../../src/audio/cartoon.js";
-import { Instruments } from "../../src/audio/index.js";
+import { Instruments, listen } from "../../src/audio/index.js";
+import { Emitter, particleSample, particleStyle, sparks } from "../../src/particles/index.js";
 
 const W = 800, H = 500, FPS = 30, DURATION = 7.5, FRAMES = Math.round(DURATION * FPS);
 const FLOOR = 470, SHELF = 205, SHELF_X0 = 250, SHELF_X1 = 550;
@@ -53,11 +55,20 @@ const letters = LETTERS.map((ch) => stage.get<Body>(`letter:${ch}`));
 const zip = stage.get<Body>(ZIP.id);
 const cast = CAST.map((c) => stage.get<Body>(c.id));
 
-/** The frame the flung character first hits a letter: where a letter starts to tip. */
-const knock = (() => {
-  for (let f = KNOCK_AT - 10; f < FRAMES; f++) for (const l of letters) if (Math.abs(poseAt(l, f).angle) > 0.04) return f;
-  return KNOCK_AT;
+/** The frame the flung character first hits a letter (where a letter starts to tip), and that letter. */
+const [knock, knocked] = (() => {
+  for (let f = KNOCK_AT - 10; f < FRAMES; f++) for (const l of letters) if (Math.abs(poseAt(l, f).angle) > 0.04) return [f, l] as const;
+  return [KNOCK_AT, letters[3]] as const;
 })();
+
+// Sparks where it hits: from between the two bodies, thrown back up the way it came,
+// landing on the shelf and the floor. A pure function of the frame, like the rest.
+const hit = (() => {
+  const a = poseAt(zip, knock), b = poseAt(knocked, knock);
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+})();
+const SPARKS = 26;
+const fx = new Emitter(sparks({ id: "sparks", x: hit.x, y: hit.y, at: knock, count: SPARKS, seed: 3, direction: -Math.PI / 2 + 0.5, spread: 2.4, speed: [220, 650], size: [3, 5], colors: ["#FFB703", "#FB8500", "#F72585", "#FFD166"], ground: [[{ x: SHELF_X0, y: SHELF }, { x: SHELF_X1, y: SHELF }], FLOOR] }));
 
 // ── The soundtrack: one schedule, played live or rendered offline ──────────
 export const schedule: Schedule = (s, bus, at) => {
@@ -103,6 +114,9 @@ export const schedule: Schedule = (s, bus, at) => {
   if (end != null) s.ding(end, bus.sfx, { vel: 0.22 });
 };
 
+/** What the soundtrack plays, as signals: the shelf reads the kick drum from it. */
+const score = listen(schedule, { extend: cartoon });
+
 // ── Drawing (DOM, so the motion check reads the real elements) ─────────────
 const INK = "#0A0A1A";
 function character(c: Who): string {
@@ -132,6 +146,8 @@ export function mount(root: HTMLElement) {
 .romp-demo .rd-letter{position:absolute;left:0;top:0;width:${LW}px;height:${LH}px;line-height:${LH}px;display:grid;place-items:center;font:400 104px/1 var(--font-display,Georgia,serif);color:var(--rd-fg);transform-origin:50% 50%}
 .romp-demo .rd-who{position:absolute;left:0;top:0;width:0;height:0}
 .romp-demo .rd-who>i{position:absolute;display:block}
+.romp-demo .rd-fx>i{display:block}
+.romp-demo .rd-burst{position:absolute;pointer-events:none}
 .romp-demo .rd-bug{position:absolute;left:0;top:0;width:150px;height:46px;border-radius:23px;background:#FDE68A;color:#1A1730;font:700 18px/46px var(--font-sans,system-ui);text-align:center;transform-origin:50% 50%}
 .romp-demo .rd-controls{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin:.9rem 0 .6rem}
 .romp-demo .rd-controls .btn{min-height:44px}
@@ -144,10 +160,11 @@ export function mount(root: HTMLElement) {
 `;
   root.classList.add("romp-demo");
   root.innerHTML = `<style>${css}</style>
-<div class="rd-frame"><div class="rd-stage" role="img" aria-label="A wordmark reading romp drops onto a shelf, a small green character is flung into the p, which tips and springs back, then five characters in hats drop into a pile">
+<div class="rd-frame"><div class="rd-stage" role="img" aria-label="A wordmark reading romp drops onto a shelf, a small green character is flung into the p in a spray of sparks, the p tips and springs back, then five characters in hats drop into a pile">
   <div class="rd-floor"></div><div class="rd-shelf"></div>
   ${LETTERS.map((ch) => `<div class="rd-letter" data-romp="letter:${ch}">${ch}</div>`).join("")}
   ${[...CAST, ZIP].map((c) => `<div class="rd-who" data-romp="${c.id}">${character(c)}</div>`).join("")}
+  <div class="rd-fx" aria-hidden="true">${"<i></i>".repeat(SPARKS)}</div><div class="rd-burst" data-romp="sparks"></div>
   <div class="rd-bug" data-romp="sticker">new!</div>
 </div></div>
 <div class="rd-controls">
@@ -171,6 +188,9 @@ export function mount(root: HTMLElement) {
   const letterEls = LETTERS.map((ch) => root.querySelector<HTMLElement>(`[data-romp="letter:${ch}"]`)!);
   const whoEls = [...CAST, ZIP].map((c) => root.querySelector<HTMLElement>(`[data-romp="${c.id}"]`)!);
   const bugEl = root.querySelector<HTMLElement>(".rd-bug")!;
+  const shelfEl = root.querySelector<HTMLElement>(".rd-shelf")!;
+  const sparkEls = [...root.querySelectorAll<HTMLElement>(".rd-fx>i")];
+  const burstEl = root.querySelector<HTMLElement>(".rd-burst")!;
   const fit = () => (stageEl.style.transform = `scale(${frame.clientWidth / W})`);
   new ResizeObserver(fit).observe(frame);
   fit();
@@ -221,6 +241,19 @@ export function mount(root: HTMLElement) {
       if (near) el.dataset.rompImpact = "1";
       else delete el.dataset.rompImpact;
     });
+    // The sparks: one element per particle (untracked: a single spark may outrun the
+    // strobe limit), and the burst as one tracked box centred where it comes from.
+    const live = fx.particlesAt(f);
+    sparkEls.forEach((el) => (el.style.display = "none"));
+    for (const p of live) Object.assign(sparkEls[p.i].style, particleStyle(p), { display: "block" });
+    const burst = particleSample(live), bb = burst.box;
+    burstEl.style.display = burst.shown && bb ? "" : "none";
+    if (bb) {
+      const rx = Math.max(burst.x - bb.x0, bb.x1 - burst.x), ry = Math.max(burst.y - bb.y0, bb.y1 - burst.y);
+      Object.assign(burstEl.style, { left: `${burst.x - rx}px`, top: `${burst.y - ry}px`, width: `${2 * rx}px`, height: `${2 * ry}px`, opacity: String(burst.opacity) });
+    }
+    // The shelf brightens on each kick drum: the score's envelope, a pure function of t.
+    shelfEl.style.opacity = String(0.7 + 0.3 * Math.min(1, score.envelopeAt(t, { voice: "kick", decay: 0.25 }) / 0.22));
     // The sticker: grows in properly, unless the bug is planted (then it pops in at full size).
     const STICK = 150;
     const dt = f - STICK;
@@ -304,7 +337,7 @@ export function mount(root: HTMLElement) {
       formatReport(r, FPS) +
       (r.issues.length
         ? "\n\nUntick “Plant a bug” and run it again: the sticker then grows in, and the check passes."
-        : "\n\nNo pops, strobes, teleports, spikes or crops. The sharp turns are real impacts, marked as such, and the character that flies in from off-frame is entering, so its partial crop is fine. Tick “Plant a bug” to watch it catch one.");
+        : "\n\nNo pops, strobes, teleports, spikes or crops. The sharp turns are real impacts, marked as such; the character that flies in from off-frame is entering, so its partial crop is fine; and the sparks are checked as one burst that grows in and fades out. Tick “Plant a bug” to watch it catch one.");
   };
 
   bugBox.onchange = () => seek(clock.t);

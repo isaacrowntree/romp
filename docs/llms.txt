@@ -21,6 +21,7 @@ Install from GitHub (not on npm yet): `bun add github:isaacrowntree/romp planck`
 
 ## romp/remotion
 - `track(name, { impact?, seamless?, allowCrop? })` → data attributes for `romp check`.
+- `trackBurst(name, particles, opts?)` → props for an empty element covering a particle burst (centred where it comes from): the check follows the burst as one object.
 
 ## romp/three
 - `motionReport({ seek, scene, camera, fps, W, H, from?, to?, whips?, covered? })` (userData: impacts, seamless, allowCrop), `screenBox`, `screenArea`, `opacityOf`.
@@ -29,8 +30,26 @@ Install from GitHub (not on npm yet): `bun add github:isaacrowntree/romp planck`
 - `Synth` (voices: marimba, bell, whoosh, tap, splash, riser, thump, click, engine, reverb…), `Instruments` (pluck, kick, shaker, rhodes, piano, upright, rim, brush), `createMix(synth, { levels?, sends?, room? })` → buses music/drums/sfx/voice/master.
 - A `Schedule` is `(synth, buses, at) => void`; `at(filmSeconds)` → context time or null (already played).
 - `renderOffline(schedule, { duration, extend? })` → AudioBuffer; `renderWav(...)` → base64 WAV; `playLive(ctx, schedule, { from?, extend? })` → `{ origin, stop() }`. `fitTo`, `midiHz`, `rng`, `wavBase64`, `LEAD` (1/30 s).
+- `listen(schedule, { extend? })` → `Score`: runs a synchronous schedule silently and records every voice it plays (outermost call only) as `{ t, end, voice, bus, vel, midi?, shape: hit|swell|bed }`. `score.envelopeAt(t, { bus?, voice?, decay? })` (sum of levels through each event's shape), `score.beatAt(t, filter = { bus: "drums" })` → `{ index, phase, since, t0, t1 }`, `score.onsetsBetween(t0, t1, filter?)`, `score.select(filter)`. Pure functions of film time: audio-reactive visuals without a live analyser.
 - `romp/audio/cartoon`: `cartoon` (extend with plop, boing, babble, slurp, beep, ding, tock, pip, swish, scribble) and `VOICES`.
+
+## romp/particles
+- `new Emitter({ id?, seed?, fps? = 30, at? (frame), count? | rate? + until?, x?, y?, area?, direction? = -π/2, spread? = 2π, speed?, gravity? = 1200, wind?, drag?, sway?, swayHz?, life?, size?, spin?, flip?, colors?, shapes?, grow? = 0.08, fadeIn?, fadeOut? = 0.3, shrink?, align?, stretch?, ground?, bounce? = 0.3, friction? = 0.6 })`. Ranges are a number or [min, max]; px, seconds, radians (screen space). `emitter.particlesAt(frame)` → `{ i, emitter, x, y, x0, y0, vx, vy, angle, size, length, flip, opacity, color, shape, age, life, resting }[]`, a pure function of the frame (seeded hash per particle index, closed-form flight; bounces on `ground` found once per particle). `emitter.span`, `emitter.count`.
+- `particlesAt(emitters, frame)`; presets (options to spread/override) `confetti`, `sparks`, `snow({ width, height?, until })`, `fountain`; `particleStyle(p)` (inline CSS), `drawParticles(ctx, ps)` (canvas), `particleBox(p)`, `particleBounds(ps)`, `particleSample(ps, frame?)` (a burst as one motion-check sample, centred on where it comes from), `hash01(seed, i, k)`.
+- Motion check: particles grow in and fade out by default (not pops); single sparks can be strobes, so track the burst (`trackBurst` / `particleSample`), not each particle.
+
+## romp/theatre (Theatre.js; no import of @theatre/core)
+- `seekSequence(sequence, seek?)` → `(t) => void` (moves the playhead, then seek(t)); `followSequence(sequence, onChange, seek, rafDriver?)` → unsubscribe (pass `onChange` from @theatre/core).
+- `objectSample(value, { size?, frame? })`, `objectsRow(objects, opts)` (reads x, y / position, opacity, scale, width, height, visible); `theatreFrames(o)`, `theatreReport({ sequence, collect, to, from?, fps?, seek?, ...AnalyzeOptions })`.
+
+## romp/motion-canvas (no import of @motion-canvas/*)
+- `yield* playBaked((t) => …, { duration, time?: useTime, fps? })`; `centred(pose, W, H)` → `{ position, rotation (deg) }` for a centre-origin view.
+- `motionCanvasReport({ seek: (f) => player.playback.seek(f), nodes: () => byKey(view, keys), fps, width, height, to, from? })` → Promise<Report>; `byKey`, `nodeSample`, `nodesRow`.
+
+## romp/lottie (lottie-web; no import)
+- `lottieReport(anim, { layers?, from?, to?, ...AnalyzeOptions })` (fps/size from the animation), `lottieFrames`, `collectLottie`. Steps `goToAndStop(f, true)`; layers by AE name, precomp layers "Precomp/Layer"; transforms through parents and precomps; null and matte layers skipped. A layer cut in at full size is a pop.
 
 ## CLI
 - `romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--json]`: plays a Remotion composition in headless Chromium, every frame; exit 1 on issues. The entry default-exports `{ component, props?, durationInFrames, fps, width, height, whips?, covered? }` or a function of `--arg` returning one.
+- `romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]`: plays a Lottie export with lottie-web (installed in your project) in headless Chromium and checks every layer.
 - `romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]`: renders a module's `render(arg)` in headless Chromium and loudness-normalises it.

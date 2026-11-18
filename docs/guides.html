@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Guides — romp</title>
-    <meta name="description" content="How to use romp: bake a physics scene and read poses, character motion from real impacts, live playback on the audio clock or offline rendering, synthesised sound from one schedule, and the motion check for Remotion, the DOM and three.js." />
+    <meta name="description" content="How to use romp: bake a physics scene and read poses, character motion from real impacts, live playback on the audio clock or offline rendering, synthesised sound from one schedule and the soundtrack as a signal, deterministic particles, and the motion check for Remotion, the DOM, three.js, Lottie, Theatre.js and Motion Canvas." />
     <link rel="canonical" href="https://isaacrowntree.com/romp/guides.html" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="romp" />
     <meta property="og:url" content="https://isaacrowntree.com/romp/guides.html" />
     <meta property="og:title" content="Guides — romp" />
-    <meta property="og:description" content="How to use romp: bake a physics scene and read poses, character motion from real impacts, live playback on the audio clock or offline rendering, synthesised sound from one schedule, and the motion check for Remotion, the DOM and three.js." />
+    <meta property="og:description" content="How to use romp: bake a physics scene and read poses, character motion from real impacts, live playback on the audio clock or offline rendering, synthesised sound from one schedule and the soundtrack as a signal, deterministic particles, and the motion check for Remotion, the DOM, three.js, Lottie, Theatre.js and Motion Canvas." />
     <meta property="og:image" content="https://isaacrowntree.com/romp/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.3.1","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.4.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive"}
     </script>
   </head>
   <body>
@@ -49,7 +49,10 @@
   <a href="#motion">Motion: reactions from real impacts</a><br>
   <a href="#play">Two ways to play: live or frame by frame</a><br>
   <a href="#sound">Sound: one schedule</a><br>
-  <a href="#check">The motion check</a>
+  <a href="#signal">Sound as a signal</a><br>
+  <a href="#particles">Particles</a><br>
+  <a href="#check">The motion check</a><br>
+  <a href="#timelines">Other timelines: Lottie, Theatre.js, Motion Canvas</a>
 </nav>
 
 <h2 id="physics">Physics: bake a scene, read poses</h2>
@@ -146,6 +149,52 @@ export const schedule: Schedule = (s, bus, at) =&gt; {
 </ul>
 <p>The rules worth keeping: <strong>restraint</strong> (only each beat's focal event gets a sound), <strong>one family</strong> (tonal effects on one voice, in the score's key), <strong>transients lead the picture by about a frame</strong> (<code>LEAD</code>), <strong>no identical repeats</strong> (every voice takes a seed), and <strong>keep the energy between 200&nbsp;Hz and 6&nbsp;kHz</strong> so it survives a phone speaker. <code>romp sound</code> normalises the result to −16&nbsp;LUFS.</p>
 
+<h2 id="signal">Sound as a signal</h2>
+<p>Visuals that react to the soundtrack usually read a live analyser, which a frame-by-frame renderer can't have. romp's soundtrack is already a schedule, so it can tell you what plays when. <code>listen(schedule)</code> runs the schedule once against a silent stand-in for an AudioContext and records every voice it calls: when, on which bus, how loud, which note and how long it rings. The <code>Score</code> it returns answers as pure functions of film time:</p>
+<pre><code>import { listen } from "romp/audio";
+import { cartoon } from "romp/audio/cartoon";
+
+const score = listen(schedule, { extend: cartoon });    // once, next to your baked stage
+
+function seek(t) {
+  const kick = score.envelopeAt(t, { voice: "kick", decay: 0.25 });   // a pulse on every kick
+  shelf.style.opacity = String(0.7 + 0.3 * Math.min(1, kick / 0.22));
+  const { phase } = score.beatAt(t);                                  // 0 → 1 between drum onsets
+  logo.style.scale = String(1 + 0.04 * Math.exp(-phase * 6));
+  for (const hit of score.onsetsBetween(t - 1 / 30, t, { bus: "sfx" })) flash(hit.voice);
+}</code></pre>
+<ul>
+  <li><strong>What's recorded:</strong> the outermost voice call only (an <code>upright</code> plucks inside, a <code>ding</code> plays a marimba: one event each), with its bus (found through any panner or filter on the way), its <code>vel</code> or the voice's default, and its note for tonal voices.</li>
+  <li><strong>Shapes:</strong> a hit attacks in 5&nbsp;ms and decays over its voice's ring (<code>decay</code> overrides it: short for a snappy pulse); a swell (<code>whoosh</code>, <code>riser</code>, <code>engine</code>) rises to its peak and falls; a bed (<code>crackle</code>, <code>surf</code>, <code>babble</code>) holds.</li>
+  <li><strong>Times are as scheduled</strong>, so a transient you led by a frame (<code>LEAD</code>) peaks a frame before the picture's impact, as it should.</li>
+  <li>The schedule must be synchronous. The demo above brightens its shelf on every kick this way.</li>
+</ul>
+
+<h2 id="particles">Particles</h2>
+<p>Real-time particle libraries step a simulation every animation frame, so a renderer that draws frame 90 before frame 89 (Remotion does) gets a different burst each time. <code>romp/particles</code> makes every particle a pure function of the frame: its launch (where, which way, how fast, its size, colour and spin) comes from a seeded hash of its own index, and its flight is closed-form (gravity, wind, linear drag, a sideways sway, spin and a confetti flip).</p>
+<pre><code>import { Emitter, confetti, sparks, snow, particlesAt, particleStyle, drawParticles } from "romp/particles";
+
+const burst = new Emitter(confetti({ x: 540, y: 900, at: 45, seed: 3, ground: 1830 }));
+const hits = new Emitter(sparks({ x: hit.x, y: hit.y, at: hitFrame, direction: -Math.PI / 2, spread: 2.4,
+                                  ground: [[{ x: 250, y: 205 }, { x: 550, y: 205 }], 470] }));
+const flakes = new Emitter(snow({ width: 1080, height: 1920, until: 900 }));
+
+// Remotion / DOM: one element per particle, keyed by its stable index
+burst.particlesAt(frame).map((p) =&gt; &lt;i key={p.i} style={particleStyle(p)} /&gt;);
+// canvas
+drawParticles(ctx, particlesAt([burst, hits, flakes], frame));</code></pre>
+<ul>
+  <li><strong>Plain data out:</strong> <code>{ i, x, y, x0, y0, vx, vy, angle, size, length, flip, opacity, color, shape, age, life, resting }</code>, so DOM, SVG, canvas and three.js renderers can all draw it.</li>
+  <li><strong>Grounds:</strong> a y, or the same polyline you gave <code>stage.ground()</code>, or a list of them. Particles bounce (<code>bounce</code>, <code>friction</code>) and come to rest on floors; bounces are found once per particle by stepping the same closed form at 240&nbsp;Hz.</li>
+  <li><strong>Streams:</strong> <code>rate</code> particles per second, for <code>count</code> particles or until the frame <code>until</code>. Changing <code>count</code> never reshuffles the particles you already had.</li>
+  <li><strong>Presets</strong> are options to spread and override: <code>confetti</code> (tumbling paper), <code>sparks</code> (streaks that face their motion: <code>align</code>, <code>stretch</code>), <code>snow</code> (a stream from above the frame, swaying) and <code>fountain</code>.</li>
+</ul>
+<h3>Particles and the motion check</h3>
+<p>Particles grow in (<code>grow</code>, 0.08&nbsp;s) and fade out (<code>fadeOut</code>, 0.3&nbsp;s) by default, so even tracked one by one they aren't pops; set both to 0 and the check will catch them. But single sparks fly faster than the strobe limit by design, so track the <strong>burst</strong> as one object instead: <code>trackBurst(name, particles)</code> from <code>romp/remotion</code> gives an empty element covering the burst, centred where it comes from, at its strongest opacity; <code>particleSample(particles)</code> gives the same sample for your own collector. A burst spreading out is a change of size, not a move. Particle elements you don't mark aren't checked at all. A burst that fills the frame may need <code>allowCrop</code>.</p>
+<pre><code>const sparks = hits.particlesAt(frame);
+&lt;div {...trackBurst("sparks", sparks)} /&gt;
+{sparks.map((p) =&gt; &lt;i key={p.i} style={particleStyle(p)} /&gt;)}</code></pre>
+
 <h2 id="check">The motion check</h2>
 <p>It steps every frame, follows each tracked element's on-screen centre, box, size and opacity, and flags:</p>
 <table>
@@ -174,15 +223,60 @@ export default (lang) =&gt; ({ component: MyVideo, props: { lang }, durationInFr
 <pre><code>import { motionReport } from "romp/three";
 const { issues } = motionReport({ seek, scene, camera, fps: 30, W: 886, H: 1920, from: 0, to: 30, whips, covered });</code></pre>
 <p>Name the objects worth checking (<code>obj.name = "van"</code>); deliberate landings go in <code>obj.userData.impacts</code> (seconds), swapped twins set <code>userData.seamless</code>.</p>
+<h3>Lottie, Theatre.js, Motion Canvas</h3>
+<p>See <a href="#timelines">other timelines</a> below.</p>
 <h3>Anything else</h3>
 <p>Build <code>{ f, row: { name: { x, y, shown, onScreen, area, opacity, box? } } }</code> per frame and call <code>analyze(frames, { fps, width, height })</code>; <code>formatReport()</code> prints it.</p>
 <h3>The CLI</h3>
 <pre><code>romp check &lt;entry.tsx&gt; [--public dir] [--from s] [--to s] [--arg json] [--json]
+romp check --lottie &lt;anim.json&gt; [--layers a,b] [--from s] [--to s] [--json]
 romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16]</code></pre>
 <p><code>romp check</code> bundles the entry with esbuild, plays it in headless Chromium with <code>@remotion/player</code> and seeks every frame. <code>romp sound</code> bundles a module exporting <code>render(arg)</code> (an <code>AudioBuffer</code> or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.</p>
+
+<h2 id="timelines">Other timelines: Lottie, Theatre.js, Motion Canvas</h2>
+<p>Anything you can seek can host romp's baked motion and be checked. These adapters are thin: none of them imports its library (each is an optional peer dependency), so they load anywhere and you pass in what they need.</p>
+<h3>Lottie (After Effects exports)</h3>
+<p><code>romp/lottie</code> steps a lottie-web animation with <code>goToAndStop(frame, true)</code> and reads every layer as lottie-web computed it: its transform through its parents and any precomps it sits in, its opacity, and its in and out points. A layer that cuts in at full size is a pop, a hold keyframe that jumps it across the comp is a teleport, one parked half off the comp is cropped. Motion designers can run it on an export before it ships.</p>
+<pre><code>import lottie from "lottie-web";
+import { lottieReport, formatReport } from "romp/lottie";
+
+const anim = lottie.loadAnimation({ container, renderer: "svg", autoplay: false, loop: false, animationData });
+const report = lottieReport(anim, { allowCrop: ["background"] });   // every layer; or { layers: ["ball", "badge"] }
+console.log(formatReport(report, anim.frameRate));</code></pre>
+<pre><code>bunx romp check --lottie anim.json             # headless Chromium; exit 1 on issues (needs lottie-web installed)</code></pre>
+<p>Layers are named by their After Effects name, precomp layers as <code>"Precomp/Layer"</code>. Null and matte layers aren't tracked. Boxes come from solids, images, precomps, shape paths (vertices and handles, through each group's transform) and, in a browser, text.</p>
+<h3>Theatre.js</h3>
+<p>A Theatre sequence's <code>position</code> is film seconds. Let Theatre's playhead drive romp (the studio's scrubber, <code>sequence.play()</code>), or let romp drive Theatre (the <code>Clock</code>, a Remotion frame, the motion check):</p>
+<pre><code>import { onChange } from "@theatre/core";
+import { followSequence, seekSequence, theatreReport, objectsRow } from "romp/theatre";
+
+const stop = followSequence(sheet.sequence, onChange, (t) =&gt; stage.pose(t));
+const clock = new Clock({ seek: seekSequence(sheet.sequence, (t) =&gt; stage.pose(t)), duration: 6 });
+
+const report = theatreReport({ sequence: sheet.sequence, to: 6, fps: 30, width: 1920, height: 1080,
+  collect: () =&gt; objectsRow({ hero, badge }, { size: { w: 120, h: 120 }, frame: { width: 1920, height: 1080 } }) });</code></pre>
+<p><code>objectsRow</code> reads each object's <code>x</code>, <code>y</code>, <code>opacity</code>, <code>scale</code>, <code>width</code>, <code>height</code> and <code>visible</code>; or collect with <code>collectDom(root)</code>. If your objects update on Theatre's rafDriver, tick it in <code>seek</code>. The playhead is put back afterwards.</p>
+<h3>Motion Canvas</h3>
+<p>Scenes are generators that advance a frame per <code>yield</code>, with the view's origin at its centre. <code>playBaked</code> plays baked poses by the scene's own time; <code>centred</code> converts a screen-space pose:</p>
+<pre><code>import { useTime } from "@motion-canvas/core";
+import { playBaked, centred, motionCanvasReport, byKey } from "romp/motion-canvas";
+
+export default makeScene2D(function* (view) {
+  const hero = &lt;Circle key="hero" size={120} fill="#4361EE" /&gt;;
+  view.add(hero);
+  yield* playBaked((t) =&gt; {
+    const p = centred(poseAtTime(body, t), 1920, 1080);
+    hero.position(p.position);
+    hero.rotation(p.rotation);
+  }, { duration: 6, time: useTime });
+});
+
+// the motion check over a project (in the browser, with a Player)
+const report = await motionCanvasReport({ seek: (f) =&gt; player.playback.seek(f),
+  nodes: () =&gt; byKey(player.playback.currentScene.getView(), ["hero"]), fps: 30, width: 1920, height: 1080, to: 6 });</code></pre>
 </div>
 
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.3.1 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.4.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>

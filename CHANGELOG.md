@@ -3,6 +3,40 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.4.0] — 2026-11-18
+
+### Added
+- **romp/particles**: a deterministic particle emitter. Each particle's launch
+  comes from a seeded hash of its index and its flight is closed-form (gravity,
+  wind, linear drag, sway, spin, confetti flip), so `particlesAt(frame)` is a
+  pure function of the frame: any frame, any order, in a live viewer, Remotion
+  or the motion check. Particles bounce and come to rest on a `ground` (a y, or
+  the polyline you gave `stage.ground()`), grow in and fade out by default (not
+  pops), and come out as plain data. Presets `confetti`, `sparks`, `snow` and
+  `fountain`; `particleStyle` (DOM), `drawParticles` (canvas), and
+  `particleSample` to check a burst as one object.
+- `trackBurst(name, particles)` in **romp/remotion**: tracks a particle burst as
+  one object for `romp check`.
+- **Sound as a signal**: `listen(schedule)` in **romp/audio** runs a schedule
+  silently and records every voice it plays; the `Score` answers
+  `envelopeAt(t, { bus?, voice?, decay? })`, `beatAt(t)` and
+  `onsetsBetween(t0, t1)` as pure functions of film time, for visuals that
+  react to the soundtrack without a live analyser.
+- **romp/theatre**: `seekSequence`, `followSequence`, `objectsRow` and
+  `theatreReport`, so a Theatre.js sequence can host romp-baked motion and the
+  motion check can step it.
+- **romp/motion-canvas**: `playBaked` (baked poses inside a scene, by its time),
+  `centred`, and `motionCanvasReport` / `byKey` / `nodeSample` to run the
+  motion check over a Motion Canvas project.
+- **romp/lottie** and `romp check --lottie anim.json`: the motion check for
+  lottie-web animations (After Effects exports), every layer through its
+  parents and precomps: a layer cut in at full size is a pop.
+- @theatre/core, @motion-canvas/core, @motion-canvas/2d and lottie-web are
+  optional peer dependencies; none of the adapters import them.
+- Demo: sparks where the flung character hits, tracked as one burst (the check
+  stays clean), and a shelf that brightens on every kick drum, read from the
+  score.
+
 ## [0.3.1] — 2026-11-18
 
 ### Fixed

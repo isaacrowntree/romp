@@ -1,8 +1,8 @@
-<!-- {"title": "API reference — romp", "description": "Every export of romp: romp/core (Stage, Body, SpringyBody, Drop, Leap, poseAt, impactResponse, jiggleParts, Clock…), romp/check, romp/remotion, romp/three, romp/audio and romp/audio/cartoon.", "nav": "api", "path": "api.html"} -->
+<!-- {"title": "API reference — romp", "description": "Every export of romp: romp/core (Stage, Body, SpringyBody, Drop, Leap, poseAt, impactResponse, jiggleParts, Clock…), romp/check, romp/remotion, romp/three, romp/audio (listen, Score), romp/audio/cartoon, romp/particles, romp/theatre, romp/motion-canvas and romp/lottie.", "nav": "api", "path": "api.html"} -->
 <section class="hero"><h1>API reference</h1><p class="hero__lede">Every export, by entry point. The build fails if this page names anything romp doesn't export.</p></section>
 <div class="prose api">
 <nav class="toc" aria-label="Entry points">
-  <a href="#core">romp/core</a> · <a href="#check">romp/check</a> · <a href="#remotion">romp/remotion</a> · <a href="#three">romp/three</a> · <a href="#audio">romp/audio</a> · <a href="#cartoon">romp/audio/cartoon</a> · <a href="#cli">CLI</a>
+  <a href="#core">romp/core</a> · <a href="#check">romp/check</a> · <a href="#remotion">romp/remotion</a> · <a href="#three">romp/three</a> · <a href="#audio">romp/audio</a> · <a href="#cartoon">romp/audio/cartoon</a> · <a href="#particles">romp/particles</a> · <a href="#theatre">romp/theatre</a> · <a href="#motion-canvas">romp/motion-canvas</a> · <a href="#lottie">romp/lottie</a> · <a href="#cli">CLI</a>
 </nav>
 
 <h2 id="core">romp/core</h2>
@@ -77,6 +77,9 @@ Report = { tracked, frames, issues: { frame, name, kind: "pop" | "strobe" | "tel
 <h2 id="remotion">romp/remotion</h2>
 <h3 data-export="track" id="track">track</h3>
 <pre class="sig"><code>track(name, { impact?, seamless?, allowCrop? }): { "data-romp", "data-romp-impact"?, "data-romp-seamless"?, "data-romp-allow-crop"? }</code></pre>
+<h3 data-export="trackBurst" id="trackBurst">trackBurst</h3>
+<pre class="sig"><code>trackBurst(name, particles, { impact?, allowCrop?, allowExit? }): { "data-romp", …, style }</code></pre>
+<p>Props for an empty element covering a particle burst, centred where it comes from, at its strongest opacity: the motion check follows the burst as one object. Leave the particles themselves untracked.</p>
 <p>Also re-exports <code>collectDom</code>, <code>analyze</code> and <code>formatReport</code>. A <code>romp check</code> entry default-exports a <code>CheckEntry</code> (or a function of <code>--arg</code> returning one): <code>{ component, props?, durationInFrames, fps, width, height, whips?, covered?, croppedFraction?, croppedSeconds?, allowCrop? }</code>.</p>
 
 <h2 id="three">romp/three</h2>
@@ -102,6 +105,16 @@ renderWav(schedule, options): Promise&lt;string&gt;     // base64 WAV</code></pr
 <pre class="sig"><code>fitTo(pitchClasses, midi): midi     midiHz(midi): Hz     rng(seed): () =&gt; 0..1
 wavBase64(audioBuffer): string      LEAD = 1 / 30        // transients lead the picture by a frame</code></pre>
 <p>A <code>Schedule</code> is <code>(synth, buses, at) =&gt; void</code>, where <code>at(filmSeconds)</code> is a context time, or <code>null</code> for something already played.</p>
+<h3 data-export="listen" id="listen">listen</h3>
+<pre class="sig"><code>listen(schedule, { extend? }): Score</code></pre>
+<p>Runs a (synchronous) schedule once against a silent stand-in for an AudioContext and records every voice it plays: the outermost call only, so an <code>upright</code>'s pluck or a <code>ding</code>'s marimba isn't counted twice. Runs anywhere: node, a worker, a Remotion render.</p>
+<h3 data-export="Score" id="Score">Score</h3>
+<pre class="sig"><code>score.events: { t, end, voice, bus, vel, midi?, shape: "hit" | "swell" | "bed", peakAt? }[]
+score.select({ bus?, voice? }): ScoreEvent[]                   // a string or a list of strings each
+score.onsetsBetween(t0, t1, filter?): ScoreEvent[]             // starts in [t0, t1)
+score.envelopeAt(t, { bus?, voice?, decay? }): number          // sum of each event's level through its shape
+score.beatAt(t, filter = { bus: "drums" }): { index, phase, since, t0, t1 }</code></pre>
+<p>Every method is a pure function of film time. A hit attacks in 5&nbsp;ms then decays over its voice's ring (<code>decay</code> overrides it); a swell rises to <code>peakAt</code> and falls; a bed holds from <code>t</code> to <code>end</code>. <code>beatAt</code> uses the selected onsets as the grid (onsets within 30&nbsp;ms count as one); <code>index</code> is −1 before the first.</p>
 
 <h2 id="cartoon">romp/audio/cartoon</h2>
 <h3 data-export="cartoon" id="cartoon">cartoon</h3>
@@ -109,7 +122,64 @@ wavBase64(audioBuffer): string      LEAD = 1 / 30        // transients lead the 
 <h3 data-export="VOICES" id="VOICES">VOICES</h3>
 <p>Babble voice presets: <code>{ f0, swing, rate }</code> per name (<code>hero</code>, <code>low</code>, <code>sleepy</code>, <code>chill</code>, <code>loud</code>, <code>warm</code>, <code>sunny</code>, <code>squeaky</code>, <code>playful</code>, <code>singsong</code>).</p>
 
+<h2 id="particles">romp/particles</h2>
+<h3 data-export="Emitter" id="Emitter">Emitter</h3>
+<pre class="sig"><code>new Emitter({ id?, seed?: 1, fps?: 30, at?: 0, count? | rate? + until?, x?, y?, area?: { x0, y0, x1, y1 },
+              direction?: -π/2, spread?: 2π, speed?, gravity?: 1200, wind?: 0, drag?: 0, sway?, swayHz?,
+              life?, size?, spin?, flip?, colors?, shapes?, grow?: 0.08, fadeIn?: 0, fadeOut?: 0.3, shrink?: 0,
+              align?, stretch?: 0, ground?, bounce?: 0.3, friction?: 0.6 })
+emitter.particlesAt(frame): Particle[]      emitter.span: [firstFrame, lastFrame]      emitter.count
+Particle = { i, emitter?, x, y, x0, y0, vx, vy, angle, size, length, flip, opacity, color, shape, age, life, resting }</code></pre>
+<p>Ranges are a number or <code>[min, max]</code>; px, seconds and radians (screen space: up is −π/2). Without <code>rate</code>, all <code>count</code> particles leave at once. <code>ground</code> is a y, a polyline (<code>{ x, y }[]</code>, as for <code>stage.ground()</code>) or a list of them. Shapes: <code>circle</code>, <code>square</code>, <code>rect</code>, <code>triangle</code>, <code>star</code>, <code>line</code>.</p>
+<h3 data-export="particlesAt" id="particlesAt">particlesAt</h3>
+<pre class="sig"><code>particlesAt(emitter | emitters[], frame): Particle[]</code></pre>
+<h3 data-export="confetti" id="confetti">confetti · sparks · snow · fountain</h3>
+<pre class="sig"><code>confetti({ x, y, at, …overrides }): EmitterOptions     // 80 tumbling pieces of paper, drifting down
+sparks({ x, y, at, … }): EmitterOptions                // 36 short streaks facing their motion, falling and dying
+snow({ width, height?, until, … }): EmitterOptions     // 24/s from a line above the frame, swaying
+fountain({ x, y, count | until, … }): EmitterOptions   // 60/s in a narrow upward cone</code></pre>
+<h3 data-export="particleStyle" id="particleStyle">particleStyle · drawParticles · particleBox</h3>
+<pre class="sig"><code>particleStyle(p): CSS properties       // one absolutely positioned element per particle
+drawParticles(ctx2d, particles): void
+particleBox(p): { w, h }                // drawn size before flip</code></pre>
+<h3 data-export="particleSample" id="particleSample">particleSample · particleBounds</h3>
+<pre class="sig"><code>particleSample(particles, frame?: { width, height }): Sample     // a burst as one motion-check object
+particleBounds(particles): { x0, y0, x1, y1 } | null</code></pre>
+<p>The sample's centre is where the particles left from (weighted by opacity): a burst spreading out is a change of size, not a move.</p>
+<h3 data-export="hash01" id="hash01">hash01</h3>
+<pre class="sig"><code>hash01(seed, index, channel): 0..1     // the seeded hash behind every launch: no state, any order</code></pre>
+
+<h2 id="theatre">romp/theatre</h2>
+<p>No import of <code>@theatre/core</code>: pass its <code>onChange</code> to <code>followSequence</code>.</p>
+<h3 data-export="seekSequence" id="seekSequence">seekSequence · followSequence</h3>
+<pre class="sig"><code>seekSequence(sequence, seek?): (t) =&gt; void                           // moves the playhead, then calls seek(t)
+followSequence(sequence, onChange, seek, rafDriver?): () =&gt; void      // seek(position) on every change; returns unsubscribe</code></pre>
+<h3 data-export="objectSample" id="objectSample">objectSample · objectsRow</h3>
+<pre class="sig"><code>objectSample(object.value, { size?: { w, h }, frame?: { width, height } }): Sample
+objectsRow({ name: sheetObject }, options): Record&lt;name, Sample&gt;</code></pre>
+<p>Reads <code>x</code>, <code>y</code> (or <code>position</code>), <code>opacity</code>, <code>scale</code> / <code>scaleX</code> / <code>scaleY</code>, <code>width</code> / <code>height</code> and <code>visible</code>.</p>
+<h3 data-export="theatreReport" id="theatreReport">theatreReport · theatreFrames</h3>
+<pre class="sig"><code>theatreReport({ sequence, collect: () =&gt; row, to, from?, fps?, seek?, …AnalyzeOptions }): Report
+theatreFrames(sameOptions): FrameRow[]      // the playhead is put back afterwards</code></pre>
+
+<h2 id="motion-canvas">romp/motion-canvas</h2>
+<p>No import of <code>@motion-canvas/*</code>: nodes are read through <code>absolutePosition()</code>, <code>absoluteOpacity()</code>, <code>cacheBBox()</code> and <code>localToWorld()</code>.</p>
+<h3 data-export="playBaked" id="playBaked">playBaked · centred</h3>
+<pre class="sig"><code>yield* playBaked((t) =&gt; …, { duration, time?: useTime, fps?: 30 })     // apply(t) every frame, t from its start
+centred(pose, width, height): { position: [x, y], rotation: degrees }    // screen px → view px from the centre</code></pre>
+<h3 data-export="motionCanvasReport" id="motionCanvasReport">motionCanvasReport · byKey · nodeSample · nodesRow</h3>
+<pre class="sig"><code>motionCanvasReport({ seek: (frame) =&gt; Promise, nodes: () =&gt; Record&lt;name, node&gt;, fps, width, height, to, from?, …AnalyzeOptions }): Promise&lt;Report&gt;
+byKey(view, keys): Record&lt;key, node&gt;      nodeSample(node, width, height): Sample      nodesRow(nodes, width, height)</code></pre>
+
+<h2 id="lottie">romp/lottie</h2>
+<p>For lottie-web animations (any renderer). Layers are named by their After Effects name; precomp layers as <code>"Precomp/Layer"</code>; null and matte layers aren't tracked. Boxes come from solids, images, precomps, shape paths and (in a browser) text.</p>
+<h3 data-export="lottieReport" id="lottieReport">lottieReport · lottieFrames · collectLottie</h3>
+<pre class="sig"><code>lottieReport(anim, { layers?, from?, to?, width?, height?, …AnalyzeOptions }): Report     // fps and size from the animation
+lottieFrames(anim, options): FrameRow[]          // goToAndStop(f, true) for every frame
+collectLottie(anim, { layers?, width?, height? }): Record&lt;name, Sample&gt;</code></pre>
+
 <h2 id="cli">CLI</h2>
 <pre><code>romp check &lt;entry.tsx&gt; [--public dir] [--from s] [--to s] [--arg json] [--json]
+romp check --lottie &lt;anim.json&gt; [--layers a,b] [--from s] [--to s] [--json]
 romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16]</code></pre>
 </div>

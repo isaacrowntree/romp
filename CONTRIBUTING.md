@@ -14,7 +14,9 @@ they keep it small and deterministic.
   that bakes differently twice, produces confident-looking wrong videos. Add or
   update a test in `test/`.
 - **The core has one runtime dependency: planck.** React, Remotion, three.js,
-  esbuild and Playwright are optional peers used only by their entry points.
+  esbuild, Playwright, Theatre.js, Motion Canvas and lottie-web are optional
+  peers used only by their entry points (the Theatre, Motion Canvas and Lottie
+  adapters don't import theirs at all).
 - **No samples.** Every sound is synthesised, so every user can ship it anywhere.
 
 ## Getting set up
@@ -39,9 +41,10 @@ test surface: open `docs/index.html`, play it with sound and run the motion chec
 |---|---|
 | `src/core/` | The physics stage and actors, character motion, curves, the realtime `Clock` |
 | `src/check/` | The motion check and the DOM collector |
-| `src/remotion/`, `src/three/` | Adapters |
-| `src/audio/` | Synth voices, instruments, the mix, live/offline playback, cartoon voices |
-| `bin/romp.mjs` | The CLI (`check`, `sound`) |
+| `src/particles/` | Deterministic particle emitters and presets |
+| `src/remotion/`, `src/three/`, `src/theatre/`, `src/motion-canvas/`, `src/lottie/` | Adapters |
+| `src/audio/` | Synth voices, instruments, the mix, live/offline playback, cartoon voices, `listen()` (the score as signals) |
+| `bin/romp.mjs` | The CLI (`check`, `check --lottie`, `sound`) |
 | `examples/` | A Remotion composition for `romp check` and a schedule for `romp sound` |
 | `docs/` | The live demo page and the generated hero |
 | `scripts/` | Demo bundle and hero GIF generation |
