@@ -112,7 +112,7 @@ window.__rompRun = async (from, to) => {
   await document.fonts.ready;
   const frames = [];
   for (let f = from; f <= to; f++) { ref.current.seekTo(f); await raf(); frames.push({ f, row: collectDom(root) }); }
-  return analyze(frames, { fps: E.fps, width: E.width, height: E.height, whips: E.whips, covered: E.covered, croppedFraction: E.croppedFraction, croppedSeconds: E.croppedSeconds, allowCrop: E.allowCrop });
+  return analyze(frames, { fps: E.fps, width: E.width, height: E.height, whips: E.whips, covered: E.covered, croppedFraction: E.croppedFraction, croppedSeconds: E.croppedSeconds, allowCrop: E.allowCrop, lostSeconds: E.lostSeconds, allowExit: E.allowExit });
 };`,
     "check",
   );

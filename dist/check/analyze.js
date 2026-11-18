@@ -9,6 +9,9 @@
  *   teleport  visible on both frames and jumped more than ~300 px
  *   spike     acceleration jumps far above its neighbours': a kink in the curve
  *             (a missing ease, two moves handed off at different speeds)
+ *   lost      has been in frame, then leaves it entirely (still shown) and
+ *             stays out for more than `lostSeconds` (1 s): bounced off the
+ *             stage or fell out of the picture. `allowExit` marks a real exit.
  *   cropped   shown and on screen, but more than `croppedFraction` (25%) of its
  *             own box is outside the frame for more than `croppedSeconds`
  *             (0.5 s) in a row: a character's head cut off by the edge. Runs
@@ -80,7 +83,7 @@ export function analyze(frames, o = {}) {
         }
     }
     if (o.width && o.height)
-        issues.push(...cropped(frames, names, o, fps, hidden));
+        issues.push(...cropped(frames, names, o, fps, hidden), ...lost(frames, names, o, fps, hidden));
     issues.sort((a, b) => a.frame - b.frame);
     return { tracked: names, frames: frames.length, issues };
 }
@@ -131,6 +134,56 @@ function cropped(frames, names, o, fps, hidden) {
                 flush();
         }
         flush();
+    }
+    return out;
+}
+/**
+ * lost: a character that has been in frame leaves it entirely (while still
+ * shown) and stays out for more than `lostSeconds`: it bounced off the stage,
+ * fell through the floor, or wandered off. An exit on purpose is marked
+ * `allowExit`. Entrances from off-frame are fine (it hasn't been in frame yet).
+ */
+function lost(frames, names, o, fps, hidden) {
+    const W = o.width, H = o.height;
+    const minRun = Math.round((o.lostSeconds ?? 1) * fps);
+    const out = [];
+    for (const name of names) {
+        if ((o.allowExit ?? []).includes(name))
+            continue;
+        let seen = false;
+        let leftAt = null;
+        let outFor = 0;
+        let flagged = false;
+        for (const { f, row } of frames) {
+            const p = row[name];
+            if (!p || !p.shown || p.allowExit) {
+                leftAt = null;
+                outFor = 0;
+                if (p?.allowExit)
+                    break;
+                continue;
+            }
+            if (hidden(f))
+                continue;
+            const share = p.box ? inFrameShare(p.box, W, H) : p.onScreen ? 1 : 0;
+            const outside = share <= 0.02 && !p.onScreen ? true : share <= 0.02;
+            if (!outside) {
+                if (share > 0.5)
+                    seen = true;
+                leftAt = null;
+                outFor = 0;
+                continue;
+            }
+            if (!seen)
+                continue; // still entering
+            if (leftAt == null)
+                leftAt = f;
+            outFor++;
+            if (outFor > minRun && !flagged) {
+                out.push({ frame: leftAt, name, kind: "lost", detail: `left the frame and stayed out for over ${(minRun / fps).toFixed(1)} s` });
+                flagged = true;
+            }
+        }
     }
     return out;
 }

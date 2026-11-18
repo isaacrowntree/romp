@@ -13,6 +13,7 @@ export declare function track(name: string, o?: {
     impact?: boolean;
     seamless?: boolean;
     allowCrop?: boolean;
+    allowExit?: boolean;
 }): Record<string, string | undefined>;
 /** What a `romp check` entry file default-exports. */
 export interface CheckEntry {
@@ -32,4 +33,6 @@ export interface CheckEntry {
     croppedSeconds?: number;
     /** names never checked for cropping (or `track(name, { allowCrop: true })`) */
     allowCrop?: string[];
+    /** names allowed to leave the frame for good (or `track(name, { allowExit: true })`) */
+    allowExit?: string[];
 }

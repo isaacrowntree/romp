@@ -16,7 +16,7 @@ Install from GitHub (not on npm yet): `bun add github:isaacrowntree/romp planck`
 - `Clock({ seek, duration, loop?, audio?, onPlay?(t), onStop?() })`: live playback; follows the AudioContext clock while sound plays. `play(from?)`, `pause()`, `seek(t)`.
 
 ## romp/check
-- `analyze(frames, { fps?, width?, height?, whips?, covered?, impacts?, seamless?, croppedFraction?, croppedSeconds?, allowCrop? })` → `{ tracked, frames, issues }`. Issues: pop (appears/vanishes in frame at ≥30% of its largest size, opaque), strobe (> ~100 px per frame at 886 px wide), teleport (> ~300 px), spike (acceleration far above its neighbours'), cropped (more than 25% of its box outside the frame for more than 0.5 s, not while entering or leaving; needs width and height). Exempt: impacts, whips, covered frames, fades/grows, seamless, allowCrop.
+- `analyze(frames, { fps?, width?, height?, whips?, covered?, impacts?, seamless?, croppedFraction?, croppedSeconds?, allowCrop?, lostSeconds?, allowExit? })` → `{ tracked, frames, issues }`. Issues: pop (appears/vanishes in frame at ≥30% of its largest size, opaque), strobe (> ~100 px per frame at 886 px wide), teleport (> ~300 px), spike (acceleration far above its neighbours'), cropped (more than 25% of its box outside the frame for more than 0.5 s, not while entering or leaving; needs width and height). Exempt: impacts, whips, covered frames, fades/grows, seamless, allowCrop.
 - `formatReport(report, fps?)`, `collectDom(root)` (every `[data-romp]` element, with its box), `inFrameShare(box, W, H)`.
 
 ## romp/remotion

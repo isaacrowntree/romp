@@ -100,6 +100,7 @@ export function motionReport({ seek, scene, camera, fps, W, H, from = 0, to = 3.
         seamless: !!o.userData.seamless,
         box: shown ? screenBox(o, camera, W, H) ?? undefined : undefined,
         allowCrop: !!o.userData.allowCrop,
+        allowExit: !!o.userData.allowExit,
       };
     }
     frames.push({ f, row });

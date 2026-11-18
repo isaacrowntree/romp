@@ -9,6 +9,9 @@
  *   teleport  visible on both frames and jumped more than ~300 px
  *   spike     acceleration jumps far above its neighbours': a kink in the curve
  *             (a missing ease, two moves handed off at different speeds)
+ *   lost      has been in frame, then leaves it entirely (still shown) and
+ *             stays out for more than `lostSeconds` (1 s): bounced off the
+ *             stage or fell out of the picture. `allowExit` marks a real exit.
  *   cropped   shown and on screen, but more than `croppedFraction` (25%) of its
  *             own box is outside the frame for more than `croppedSeconds`
  *             (0.5 s) in a row: a character's head cut off by the edge. Runs
@@ -50,6 +53,8 @@ export interface Sample {
     };
     /** never flag as cropped */
     allowCrop?: boolean;
+    /** may leave the frame for good (never flag as lost) */
+    allowExit?: boolean;
 }
 export interface FrameRow {
     f: number;
@@ -58,7 +63,7 @@ export interface FrameRow {
 export interface Issue {
     frame: number;
     name: string;
-    kind: "pop" | "strobe" | "teleport" | "spike" | "cropped";
+    kind: "pop" | "strobe" | "teleport" | "spike" | "cropped" | "lost";
     detail: string;
 }
 export interface AnalyzeOptions {
@@ -73,6 +78,10 @@ export interface AnalyzeOptions {
     croppedSeconds?: number;
     /** names never checked for cropping */
     allowCrop?: string[];
+    /** lost: how long a character may stay right out of frame before it's flagged (default 1 s) */
+    lostSeconds?: number;
+    /** names allowed to leave the frame for good (an exit on purpose) */
+    allowExit?: string[];
     /** [from, to] seconds of deliberate fast moves */
     whips?: [number, number][];
     /** [from, to] seconds where the scene is hidden */

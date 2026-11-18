@@ -28,22 +28,24 @@ const CAST: Who[] = [
   { id: "di", color: "#F472B6", voice: "playful", x: 360, size: 84, at: 116, vx: 25 },
   { id: "eli", color: "#C4B5FD", voice: "sleepy", x: 440, size: 88, at: 124, vx: -20 },
 ];
-const ZIP: Who = { id: "zip", color: "#34D399", voice: "loud", x: 880, size: 70, at: KNOCK_AT - 10, vx: -1500 };
+// Flung in from above the top-right corner, inside the walls, aimed at the "p".
+const ZIP: Who = { id: "zip", color: "#34D399", voice: "loud", x: 740, size: 70, at: KNOCK_AT - 10, vx: -700 };
 const HAT = ["brim", "crown", "pom"] as const;
 
 // ── The world, baked once ──────────────────────────────────────────────────
 function bake() {
   const s = new Stage(); // screen space: y down
-  // A box with low walls: the flung character flies in over the right one.
-  s.ground([{ x: 10, y: 300 }, { x: 10, y: FLOOR }, { x: W - 10, y: FLOOR }, { x: W - 10, y: 300 }]);
+  // A box whose walls run well above the frame, so nothing can bounce out of the picture.
+  s.ground([{ x: 10, y: -600 }, { x: 10, y: FLOOR }, { x: W - 10, y: FLOOR }, { x: W - 10, y: -600 }]);
   // The shelf is on its own layer: only the letters and the flung character touch it.
   const shelf = s.ground([{ x: SHELF_X0, y: SHELF }, { x: SHELF_X1, y: SHELF }], { layer: LAYER.B });
   LETTERS.forEach((ch, i) =>
     // Letters (layer D) touch the shelf and the flung character, not each other.
     s.add(new SpringyBody({ id: `letter:${ch}`, x: LX(i), y: -30, w: LW, h: LH, spawn: 4 + i * 6, vy: 600, ground: shelf, groundY: SHELF, hz: 2.6, layer: LAYER.D, mask: LAYER.B | LAYER.C })),
   );
-  s.add(new Body({ id: ZIP.id, shape: "circle", x: ZIP.x, y: 175, w: ZIP.size, h: ZIP.size, spawn: ZIP.at, vx: ZIP.vx, vy: -60, spin: 4, restitution: 0.45, layer: LAYER.C, mask: LAYER.FLOOR | LAYER.B | LAYER.D | LAYER.A | LAYER.C }));
-  for (const c of CAST) s.add(new Body({ id: c.id, x: c.x, y: -30, w: c.size, h: c.size * 0.9, spawn: c.at, vx: c.vx, vy: 800, upright: true, restitution: 0.33, layer: LAYER.A, mask: LAYER.FLOOR | LAYER.A | LAYER.C }));
+  s.add(new Body({ id: ZIP.id, shape: "circle", x: ZIP.x, y: -60, w: ZIP.size, h: ZIP.size, spawn: ZIP.at, vx: ZIP.vx, vy: 260, spin: 4, restitution: 0.45, bullet: true, layer: LAYER.C, mask: LAYER.FLOOR | LAYER.B | LAYER.D | LAYER.A | LAYER.C }));
+  // Round bodies, drawn round: what you see is exactly what collides.
+  for (const c of CAST) s.add(new Body({ id: c.id, shape: "circle", x: c.x, y: -30, w: c.size, h: c.size, spawn: c.at, vx: c.vx, vy: 800, upright: true, restitution: 0.33, layer: LAYER.A, mask: LAYER.FLOOR | LAYER.A | LAYER.C }));
   return s.bake({ frames: FRAMES + 2, fps: FPS });
 }
 const stage = bake();
@@ -104,7 +106,7 @@ export const schedule: Schedule = (s, bus, at) => {
 // ── Drawing (DOM, so the motion check reads the real elements) ─────────────
 const INK = "#0A0A1A";
 function character(c: Who): string {
-  const s = c.size, h = s * 0.9;
+  const s = c.size, h = s; // round, matching its circle body
   return `<svg viewBox="${-s} ${-s * 1.6} ${s * 2} ${s * 2}" width="${s * 2}" height="${s * 2}" style="position:absolute;left:${-s}px;top:${-s * 1.6}px;overflow:visible" aria-hidden="true">
   <g data-part="body">
     <ellipse cx="0" cy="${-h / 2}" rx="${s / 2}" ry="${h / 2}" fill="${c.color}" stroke="${INK}" stroke-width="5"/>
@@ -130,7 +132,7 @@ export function mount(root: HTMLElement) {
 .romp-demo .rd-letter{position:absolute;left:0;top:0;width:${LW}px;height:${LH}px;line-height:${LH}px;display:grid;place-items:center;font:400 104px/1 var(--font-display,Georgia,serif);color:var(--rd-fg);transform-origin:50% 50%}
 .romp-demo .rd-who{position:absolute;left:0;top:0;width:0;height:0}
 .romp-demo .rd-who>i{position:absolute;display:block}
-.romp-demo .rd-bug{position:absolute;left:0;top:0;width:150px;height:46px;border-radius:23px;background:var(--glint,#FDE68A);color:var(--rd-ink);font:700 18px/46px var(--font-sans,system-ui);text-align:center;transform-origin:50% 50%}
+.romp-demo .rd-bug{position:absolute;left:0;top:0;width:150px;height:46px;border-radius:23px;background:#FDE68A;color:#1A1730;font:700 18px/46px var(--font-sans,system-ui);text-align:center;transform-origin:50% 50%}
 .romp-demo .rd-controls{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin:.9rem 0 .6rem}
 .romp-demo .rd-controls .btn{min-height:44px}
 .romp-demo .rd-scrub{flex:1 1 180px;min-width:140px;accent-color:var(--rd-accent);min-height:44px}
@@ -198,10 +200,13 @@ export function mount(root: HTMLElement) {
       const el = whoEls[i];
       el.style.display = p.shown ? "" : "none";
       if (!p.shown) return;
-      const h = c.size * (b === zip ? 1 : 0.9);
-      el.style.transform = `translate(${p.x}px, ${p.y + h / 2}px) rotate(${p.angle}rad)`;
+      const h = c.size; // every body is a circle of this diameter
+      // The body turns about its centre (where planck puts it), and the drawing hangs
+      // from its feet, so rotate at the centre, then drop to the feet.
+      el.style.transform = `translate(${p.x}px, ${p.y}px) rotate(${p.angle}rad) translate(0px, ${h / 2}px)`;
       el.style.width = el.style.height = "0";
-      const look = impactResponse(b, f, i);
+      // They land against each other in a pile: keep the squash from spreading into a neighbour.
+      const look = impactResponse(b, f, i, 900, { squash: 0.15, widen: 0.2 });
       const P = parts[i];
       P.body.setAttribute("transform", `scale(${look.squashX} ${look.squashY})`);
       P.eyes.forEach((e, k) => e.setAttribute("transform", `${eyeBase[i][k]} scale(1 ${Math.max(0.1, 1 - look.blink)})`));
@@ -305,5 +310,5 @@ export function mount(root: HTMLElement) {
   bugBox.onchange = () => seek(clock.t);
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches ? 6.5 : 0;
   seek(still);
-  return { seek, clock, schedule };
+  return { seek, clock, schedule, stage };
 }

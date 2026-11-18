@@ -43,7 +43,15 @@ export declare function hop(frame: number, period?: number, height?: number, see
  * hard it hit; stretched while falling fast. `speedRef` (px/s) is the impact
  * speed that counts as a full hit.
  */
-export declare function impactResponse(actor: Body, frame: number, seed?: number, speedRef?: number): CharacterPose;
+/** How a landing reads. `squash`: how much a hard landing squashes (0.28 = 28% shorter).
+ * `widen`: how much of that squash spreads sideways (0.85 by default; lower it for
+ * characters that land against each other in a pile, so the drawing doesn't
+ * spread past its body into a neighbour it's touching). */
+export interface ImpactStyle {
+    squash?: number;
+    widen?: number;
+}
+export declare function impactResponse(actor: Body, frame: number, seed?: number, speedRef?: number, style?: ImpactStyle): CharacterPose;
 /** Is `frame` within `window` frames of one of these impacts? (Mark it for the motion check.) */
 export declare const nearImpact: (impacts: Impact[], frame: number, window?: number) => boolean;
 /** A rigid prop rocking about its contact point after each impact (a damped oscillation), and a barely-there compression. */

@@ -59,20 +59,15 @@ export function hop(frame, period = 16, height = 70, seed = 0) {
         },
     };
 }
-/**
- * A simulated body's pose from its REAL impacts: squash, closed eyes, hat
- * follow-through and jiggle summed over every recorded impact and sized by how
- * hard it hit; stretched while falling fast. `speedRef` (px/s) is the impact
- * speed that counts as a full hit.
- */
-export function impactResponse(actor, frame, seed = 0, speedRef = 900) {
+export function impactResponse(actor, frame, seed = 0, speedRef = 900, style = {}) {
+    const SQUASH = style.squash ?? 0.28, WIDEN = style.widen ?? 0.85;
     let s = 0, tilt = 0, lift = 0, shut = 0, jig = 0;
     for (const hit of actor.impacts) {
         const dt = frame - hit.frame;
         if (dt < 0)
             continue;
         const k = Math.min(1.4, hit.speed / speedRef);
-        s += 0.28 * k * Math.exp(-0.13 * dt) * Math.cos(TAU * 0.12 * dt);
+        s += SQUASH * k * Math.exp(-0.13 * dt) * Math.cos(TAU * 0.12 * dt);
         tilt += 18 * k * Math.exp(-0.1 * dt) * Math.sin(TAU * 0.09 * dt + 0.6);
         lift += Math.max(0, 4 * k * Math.exp(-0.2 * dt) * Math.sin(TAU * 0.1 * dt));
         if (dt < 3 && k > 0.3)
@@ -87,7 +82,7 @@ export function impactResponse(actor, frame, seed = 0, speedRef = 900) {
     const stretch = falling ? Math.min(0.14, v / 9000) : 0;
     return {
         squashY: i.squashY - s + stretch,
-        squashX: i.squashX + s * 0.85 - stretch * 0.6,
+        squashX: i.squashX + s * WIDEN - stretch * 0.6,
         tilt: tilt + i.tilt - stretch * 60,
         lift: lift + stretch * 30,
         blink: shut || i.blink,

@@ -3,6 +3,22 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.3.0] — 2026-11-18
+
+### Added
+- The motion check's **lost** rule: a character that has been in frame leaves it
+  entirely and stays out for more than `lostSeconds` (1 s) is flagged; mark a real
+  exit with `allowExit` (option, `track(name, { allowExit })`, `userData.allowExit`).
+- `impactResponse(body, frame, seed, speedRef, { squash, widen })`: tune how far a
+  landing squashes and how much of it spreads sideways, so characters piled
+  against each other don't overlap on screen.
+
+### Fixed
+- Demo: the flung character no longer bounces out of the picture (walls above the
+  frame), can't tunnel through others (`bullet`), turns about its centre instead
+  of its feet, and every character is drawn the same round shape as its body, so
+  what you see is what collides. The planted-bug sticker keeps dark text in dark mode.
+
 ## [0.2.0] — 2026-11-18
 
 ### Added

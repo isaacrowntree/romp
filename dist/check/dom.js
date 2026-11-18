@@ -26,6 +26,7 @@ export function collectDom(root = document.body) {
             seamless: el.dataset.rompSeamless === "1",
             box: { x0: r.left - frame.left, y0: r.top - frame.top, x1: r.right - frame.left, y1: r.bottom - frame.top },
             allowCrop: el.dataset.rompAllowCrop === "1",
+            allowExit: el.dataset.rompAllowExit === "1",
         };
         // Several elements with one name: keep the biggest (a character drawn twice for a keyline, say).
         if (!out[name] || sample.area > out[name].area)
