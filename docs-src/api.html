@@ -1,0 +1,115 @@
+<!-- {"title": "API reference — romp", "description": "Every export of romp: romp/core (Stage, Body, SpringyBody, Drop, Leap, poseAt, impactResponse, jiggleParts, Clock…), romp/check, romp/remotion, romp/three, romp/audio and romp/audio/cartoon.", "nav": "api", "path": "api.html"} -->
+<section class="hero"><h1>API reference</h1><p class="hero__lede">Every export, by entry point. The build fails if this page names anything romp doesn't export.</p></section>
+<div class="prose api">
+<nav class="toc" aria-label="Entry points">
+  <a href="#core">romp/core</a> · <a href="#check">romp/check</a> · <a href="#remotion">romp/remotion</a> · <a href="#three">romp/three</a> · <a href="#audio">romp/audio</a> · <a href="#cartoon">romp/audio/cartoon</a> · <a href="#cli">CLI</a>
+</nav>
+
+<h2 id="core">romp/core</h2>
+<h3 data-export="Stage" id="Stage">Stage</h3>
+<p>One planck.js world, baked once.</p>
+<pre class="sig"><code>new Stage({ pxPerMetre?: 100, gravity?: 9.81 * 2.2, yDown?: true })
+stage.ground(points, { friction?, layer? }): PlanckBody
+stage.add(actor): actor                  // sets actor.stage, then actor.build(stage)
+stage.bake({ frames? | duration?, fps?: 30, hz?: 240 }): Stage
+stage.pose(t, { discrete? }): void      // calls each actor's apply(pose, t); NaN poses arrive as { shown: false }
+stage.get&lt;A&gt;(id): A
+stage.m(px) · stage.px(metres) · stage.v(x, y)</code></pre>
+<h3 data-export="LAYER" id="LAYER">LAYER</h3>
+<p>Collision layer bits: <code>FLOOR</code>, <code>A</code>, <code>B</code>, <code>C</code>, <code>D</code>. Give a body a <code>layer</code> and the <code>mask</code> of layers it touches.</p>
+<h3 data-export="Body" id="Body">Body</h3>
+<p>A rigid body that records its impacts.</p>
+<pre class="sig"><code>new Body({ id, x, y, w, h, shape?: "rounded" | "box" | "circle", spawn?, vx?, vy?, spin?,
+           restitution?, friction?, density?, upright?, angularDamping?, layer?, mask?, bullet?, gravityScale? })
+body.impacts: { frame, t, speed, vx }[]     body.landed: number (first impact frame)</code></pre>
+<h3 data-export="SpringyBody" id="SpringyBody">SpringyBody</h3>
+<p>Welds itself to <code>ground</code> where it first lands on it, so it can be knocked over and wobble back.</p>
+<pre class="sig"><code>new SpringyBody({ ...BodyOptions, ground: PlanckBody, groundY: number, hz?: 2, damping?: 0.18 })
+springy.isWelded: boolean</code></pre>
+<h3 data-export="Drop" id="Drop">Drop</h3>
+<p>A dropped prop that stays upright. Contact arrests everything: spin, tilt and depth drift reach rest exactly at touchdown.</p>
+<pre class="sig"><code>new Drop({ ...BodyOptions, foot?, ledge?: { x0, x1, y }, frame?: { x, y }, spinAt?, tilt?, z?: [from, to], rock?: 1 | -1 })
+drop.flight(frame): { u, spin, tilt, z, rockDir }      // pair rockDir with rock() for the rock about its tip
+drop.framePose(frame, { discrete? }): BodyPose          // the pose minus `frame`, in its parent's coordinates</code></pre>
+<h3 data-export="Leap" id="Leap">Leap</h3>
+<p>A ballistic leap through a surface line; records each crossing with its velocity.</p>
+<pre class="sig"><code>new Leap({ id, x, y, vx, vy, surface, size?, spawn?, gravity?: 1, frame?: { x, y } })
+leap.crossings: { frame, t, x, out, vx, vy }[]      pose: { shown, x, y, angle, heading, speed }</code></pre>
+<h3 data-export="poseAt" id="poseAt">poseAt</h3>
+<pre class="sig"><code>poseAt(actor, frame, { discrete?: "nearest" | "previous" }): Pose</code></pre>
+<p>Interpolated between baked frames: numbers lerp; booleans and strings switch at the halfway point (<code>"nearest"</code>) or hold the earlier frame (<code>"previous"</code>).</p>
+<h3 data-export="poseAtTime" id="poseAtTime">poseAtTime</h3>
+<pre class="sig"><code>poseAtTime(actor, seconds, fps = 30, { discrete? }): Pose</code></pre>
+<h3 data-export="baked" id="baked">baked · clearBaked</h3>
+<pre class="sig"><code>baked(key, () =&gt; stage.bake(…)): Stage      clearBaked(): void</code></pre>
+<h3 data-export="impactResponse" id="impactResponse">impactResponse</h3>
+<pre class="sig"><code>impactResponse(body, frame, seed?, speedRef = 900): { squashX, squashY, tilt, lift, blink, jiggle }</code></pre>
+<h3 data-export="jiggleParts" id="jiggleParts">jiggleParts · jiggle</h3>
+<pre class="sig"><code>jiggle(dt, strength = 1): number
+jiggleParts(parts: string[], dt, strength = 1, lag = 1.5): Record&lt;string, number&gt;</code></pre>
+<h3 data-export="landing" id="landing">landing · hop · idle · blinkAt · boing · rock · nearImpact</h3>
+<pre class="sig"><code>landing(frame, land, seed?, strength?): CharacterPose
+hop(frame, period = 16, height = 70, seed?): { y, pose }
+idle(frame, seed?): CharacterPose          blinkAt(frame, seed?): 0..1
+boing(dt, freq?, decay?): number            nearImpact(impacts, frame, window = 2): boolean
+rock(impacts, frame, fps?, { hz?, zeta?, max?, dir? }): { angle, squash }</code></pre>
+<h3 data-export="ease" id="ease">ease · spring · ringOut · stagger · SPRING · lerp · span · clamp01</h3>
+<p>Closed-form curves: <code>ease.out</code>, <code>ease.in</code>, <code>ease.inOut</code>; <code>spring(elapsed, SPRING.smooth)</code>, <code>ringOut(elapsed, SPRING.bouncy)</code>, <code>stagger(t0, i, frames = 3, fps = 30)</code>.</p>
+<h3 data-export="Clock" id="Clock">Clock</h3>
+<pre class="sig"><code>new Clock({ seek, duration, loop?, audio?, onPlay?(t), onStop?() })
+clock.play(from?) · clock.pause() · clock.seek(t) · clock.t · clock.playing</code></pre>
+<p>Drives <code>seek(t)</code> on <code>requestAnimationFrame</code>; follows <code>audio.currentTime</code> while it's running.</p>
+
+<h2 id="check">romp/check</h2>
+<h3 data-export="analyze" id="analyze">analyze</h3>
+<pre class="sig"><code>analyze(frames: { f, row: Record&lt;name, Sample&gt; }[], { fps?, width?, height?, whips?, covered?, impacts?, seamless?,
+        croppedFraction?: 0.25, croppedSeconds?: 0.5, allowCrop?: string[], strobePx?, teleportPx? }): Report
+Sample = { x, y, shown, onScreen, area, opacity, impact?, seamless?, box?: { x0, y0, x1, y1 }, allowCrop? }
+Report = { tracked, frames, issues: { frame, name, kind: "pop" | "strobe" | "teleport" | "spike" | "cropped", detail }[] }</code></pre>
+<p>The cropped check runs when both <code>width</code> and <code>height</code> are given.</p>
+<h3 data-export="inFrameShare" id="inFrameShare">inFrameShare</h3>
+<pre class="sig"><code>inFrameShare(box, W, H): 0..1     // the share of a box inside the frame</code></pre>
+<h3 data-export="formatReport" id="formatReport">formatReport</h3>
+<pre class="sig"><code>formatReport(report, fps = 30): string</code></pre>
+<h3 data-export="collectDom" id="collectDom">collectDom</h3>
+<pre class="sig"><code>collectDom(root = document.body): Record&lt;name, Sample&gt;     // every [data-romp] element, relative to root, with its box</code></pre>
+
+<h2 id="remotion">romp/remotion</h2>
+<h3 data-export="track" id="track">track</h3>
+<pre class="sig"><code>track(name, { impact?, seamless?, allowCrop? }): { "data-romp", "data-romp-impact"?, "data-romp-seamless"?, "data-romp-allow-crop"? }</code></pre>
+<p>Also re-exports <code>collectDom</code>, <code>analyze</code> and <code>formatReport</code>. A <code>romp check</code> entry default-exports a <code>CheckEntry</code> (or a function of <code>--arg</code> returning one): <code>{ component, props?, durationInFrames, fps, width, height, whips?, covered?, croppedFraction?, croppedSeconds?, allowCrop? }</code>.</p>
+
+<h2 id="three">romp/three</h2>
+<h3 data-export="motionReport" id="motionReport">motionReport</h3>
+<pre class="sig"><code>motionReport({ seek, scene, camera, fps, W, H, from?, to?, whips?, covered? }): Report</code></pre>
+<p>Tracks every named object; <code>userData.impacts</code> (seconds), <code>userData.seamless</code> and <code>userData.allowCrop</code> mark deliberate moments. Runs the cropped check (it knows <code>W</code> and <code>H</code>).</p>
+<h3 data-export="screenBox" id="screenBox">screenBox · screenArea · opacityOf</h3>
+<pre class="sig"><code>screenBox(object, camera, W, H): { x0, y0, x1, y1 } | null     screenArea(object, camera, W, H): px²     opacityOf(object): 0..1</code></pre>
+
+<h2 id="audio">romp/audio</h2>
+<h3 data-export="Synth" id="Synth">Synth</h3>
+<p>The voices, on an (Offline)AudioContext, deterministic: <code>marimba</code>, <code>bell</code>, <code>marker</code>, <code>rim</code>, <code>flap</code>, <code>whoosh</code>, <code>tap</code>, <code>splash</code>, <code>ignite</code>, <code>crackle</code>, <code>crickets</code>, <code>surf</code>, <code>wind</code>, <code>hum</code>, <code>birds</code>, <code>riser</code>, <code>thump</code>, <code>click</code>, <code>engine</code>, <code>reverb</code>; set <code>s.harmony = (t) =&gt; Set&lt;pitchClass&gt;</code> to keep tonal effects in key.</p>
+<h3 data-export="Instruments" id="Instruments">Instruments</h3>
+<pre class="sig"><code>new Instruments(synth): pluck · kick · shaker · rhodes · piano · upright · rim · brush</code></pre>
+<h3 data-export="createMix" id="createMix">createMix</h3>
+<pre class="sig"><code>createMix(synth, { levels?, sends?, room? }): { master, music, drums, sfx, voice }</code></pre>
+<h3 data-export="renderOffline" id="renderOffline">renderOffline · renderWav</h3>
+<pre class="sig"><code>renderOffline(schedule, { duration, sampleRate?, channels?, extend? }): Promise&lt;AudioBuffer&gt;
+renderWav(schedule, options): Promise&lt;string&gt;     // base64 WAV</code></pre>
+<h3 data-export="playLive" id="playLive">playLive</h3>
+<pre class="sig"><code>playLive(audioContext, schedule, { from?, latency?: 0.08, extend? }): Promise&lt;{ origin, stop() }&gt;</code></pre>
+<h3 data-export="fitTo" id="fitTo">fitTo · midiHz · rng · wavBase64 · LEAD</h3>
+<pre class="sig"><code>fitTo(pitchClasses, midi): midi     midiHz(midi): Hz     rng(seed): () =&gt; 0..1
+wavBase64(audioBuffer): string      LEAD = 1 / 30        // transients lead the picture by a frame</code></pre>
+<p>A <code>Schedule</code> is <code>(synth, buses, at) =&gt; void</code>, where <code>at(filmSeconds)</code> is a context time, or <code>null</code> for something already played.</p>
+
+<h2 id="cartoon">romp/audio/cartoon</h2>
+<h3 data-export="cartoon" id="cartoon">cartoon</h3>
+<p>Pass as <code>extend</code> to add: <code>plop</code>, <code>boing</code>, <code>babble</code>, <code>slurp</code>, <code>beep</code>, <code>ding</code>, <code>tock</code>, <code>pip</code>, <code>swish</code>, <code>scribble</code>.</p>
+<h3 data-export="VOICES" id="VOICES">VOICES</h3>
+<p>Babble voice presets: <code>{ f0, swing, rate }</code> per name (<code>hero</code>, <code>low</code>, <code>sleepy</code>, <code>chill</code>, <code>loud</code>, <code>warm</code>, <code>sunny</code>, <code>squeaky</code>, <code>playful</code>, <code>singsong</code>).</p>
+
+<h2 id="cli">CLI</h2>
+<pre><code>romp check &lt;entry.tsx&gt; [--public dir] [--from s] [--to s] [--arg json] [--json]
+romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16]</code></pre>
+</div>

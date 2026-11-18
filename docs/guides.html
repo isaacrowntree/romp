@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Guides — romp</title>
+    <meta name="description" content="How to use romp: bake a physics scene and read poses, character motion from real impacts, live playback on the audio clock or offline rendering, synthesised sound from one schedule, and the motion check for Remotion, the DOM and three.js." />
+    <link rel="canonical" href="https://isaacrowntree.com/romp/guides.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="romp" />
+    <meta property="og:url" content="https://isaacrowntree.com/romp/guides.html" />
+    <meta property="og:title" content="Guides — romp" />
+    <meta property="og:description" content="How to use romp: bake a physics scene and read poses, character motion from real impacts, live playback on the audio clock or offline rendering, synthesised sound from one schedule, and the motion check for Remotion, the DOM and three.js." />
+    <meta property="og:image" content="https://isaacrowntree.com/romp/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="romp: a wordmark of springy letters, a knocked-over p and a pile of hatted characters" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#f7f6fb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#13121b" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
+    <link rel="stylesheet" href="style.css?v=74e241cc" />
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.2.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check"}
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="masthead">
+      <div class="shell masthead__inner">
+        <a class="wordmark" href="./">r<span>o</span>mp</a>
+        <nav aria-label="Sections">
+          <a href="./">Home</a>
+          <a href="./guides.html" aria-current="page">Guides</a>
+          <a href="./api.html">API</a>
+          <a href="./changelog.html">Changelog</a>
+          <a href="https://github.com/isaacrowntree/romp">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main"><div class="shell">
+<section class="hero"><h1>Guides</h1><p class="hero__lede">From a first pile of characters to a soundtrack and a motion check in CI.</p></section>
+<div class="prose">
+<nav class="toc" aria-label="On this page">
+  <a href="#physics">Physics: bake a scene, read poses</a><br>
+  <a href="#motion">Motion: reactions from real impacts</a><br>
+  <a href="#play">Two ways to play: live or frame by frame</a><br>
+  <a href="#sound">Sound: one schedule</a><br>
+  <a href="#check">The motion check</a>
+</nav>
+
+<h2 id="physics">Physics: bake a scene, read poses</h2>
+<p>A <code>Stage</code> is one planck.js (Box2D) world. You add actors, bake it <strong>once</strong> in fixed steps (240&nbsp;Hz by default) and it stores one pose per frame for every actor. After that, reading a pose is a pure function of the frame, so it doesn't matter in which order, or how often, frames are drawn.</p>
+<pre><code>import { Stage, Body, SpringyBody, LAYER, poseAt } from "romp/core";
+
+const s = new Stage();                       // px; y down; gravity a little heavier than life
+s.ground([{ x: 10, y: 0 }, { x: 10, y: 470 }, { x: 790, y: 470 }, { x: 790, y: 0 }]);
+
+// A shelf only the letters (layer B) and the flung character (layer C) touch.
+const shelf = s.ground([{ x: 250, y: 205 }, { x: 550, y: 205 }], { layer: LAYER.B });
+s.add(new SpringyBody({ id: "p", x: 497, y: -30, w: 64, h: 84, spawn: 22, ground: shelf, groundY: 205,
+                        layer: LAYER.B, mask: LAYER.B | LAYER.C }));
+s.add(new Body({ id: "zip", shape: "circle", x: 880, y: 175, w: 70, h: 70, spawn: 40, vx: -1500,
+                 layer: LAYER.C, mask: LAYER.FLOOR | LAYER.B | LAYER.A | LAYER.C }));
+s.add(new Body({ id: "ada", x: 120, y: -30, w: 96, h: 86, spawn: 92, vy: 800, upright: true,
+                 layer: LAYER.A, mask: LAYER.FLOOR | LAYER.A | LAYER.C }));  // skips the shelf
+s.bake({ frames: 225, fps: 30 });
+
+const p = poseAt(s.get&lt;Body&gt;("ada"), frame);   // { shown, x, y, angle } (centre, px)</code></pre>
+<ul>
+  <li><strong>Units:</strong> metres in the world and px on screen (<code>pxPerMetre</code>, default 100). <code>new Stage({ yDown: false })</code> for y-up scenes such as three.js.</li>
+  <li><strong>Bodies</strong> take their feet position, size, <code>shape</code> (<code>"rounded"</code>, <code>"box"</code> or <code>"circle"</code>), a <code>spawn</code> frame, a launch velocity and spin, restitution, <code>upright</code>, and a collision <code>layer</code> and <code>mask</code>.</li>
+  <li><strong>Impacts</strong> are recorded as the world bakes: a sudden loss of speed in the gravity direction, with its frame, time and speed. <code>body.landed</code> is the first one.</li>
+  <li><strong><code>SpringyBody</code></strong> welds itself to its ground where it first lands <em>on that ground</em> (a knock in mid-air doesn't weld it), so it can be knocked over and wobble back.</li>
+  <li><strong><code>Drop</code></strong> is a dropped prop that stays upright: a contact <code>foot</code>, a <code>gravityScale</code> (small props fall snappier), <code>spinAt</code> and <code>tilt</code> that unwind to zero exactly at touchdown, depth drift <code>z: [from, to]</code> arrested on contact, a <code>rock</code> direction, and its own <code>ledge</code> with a <code>frame</code> offset to draw it in its parent's coordinates (<code>flight(frame)</code>, <code>framePose(frame)</code>). <strong><code>Leap</code></strong> is a ballistic leap through a surface (a fish), with a <code>gravity</code> scale and <code>frame</code> offset, recording where it crosses it.</li>
+  <li><strong>Your own actors</strong> implement <code>build(stage)</code>, <code>control(t, dt)</code>, <code>sample(t)</code> and, optionally, <code>apply(pose, t)</code>; <code>stage.add()</code> sets <code>actor.stage</code> first, and <code>stage.pose(t)</code> hands every actor its interpolated pose (a pose with a NaN in it arrives as <code>{ shown: false }</code>). <code>baked(key, build)</code> memoises a stage per scene.</li>
+  <li><strong>Matching an existing renderer:</strong> booleans and strings switch at the halfway point between baked frames; <code>poseAt(actor, frame, { discrete: "previous" })</code> holds the earlier frame's value instead.</li>
+  <li><strong>Spawn actors off screen</strong> (above the frame, say) so the motion check never sees one pop into place.</li>
+</ul>
+
+<h2 id="motion">Motion: reactions from real impacts</h2>
+<p><code>impactResponse(body, frame)</code> turns a body's recorded impacts into a character's reaction, each sized by how hard it hit and decaying on its own curve:</p>
+<pre><code>import { impactResponse, jiggleParts } from "romp/core";
+
+const look = impactResponse(body, frame, seed);
+// squashX / squashY: squash about the feet on landing, stretch while falling fast
+// tilt / lift:        the hat (or antenna) lags and settles: follow-through
+// blink:              eyes shut on a hard impact, plus unsynced idle blinks
+// jiggle:             a single secondary-motion value
+
+// Several parts that follow through in turn (brim, then crown, then pom-pom):
+const last = body.impacts.filter((h) =&gt; h.frame &lt;= frame).at(-1);
+const parts = last ? jiggleParts(["brim", "crown", "pom"], frame - last.frame, last.speed / 900) : {};</code></pre>
+<p>Without physics, the same vocabulary is available as pure functions of the frame: <code>landing(frame, land)</code> (a scripted landing), <code>hop(frame, period, height)</code> (a hop cycle with squash on contact), <code>idle(frame)</code> (breathing and blinks), <code>blinkAt(frame, seed)</code>, <code>boing(dt)</code> (a decaying oscillation) and <code>rock(impacts, frame)</code> (a rigid prop rocking about its contact point). <code>ease</code>, <code>spring()</code>, <code>ringOut()</code> and <code>stagger()</code> are closed-form curves for everything that isn't simulated. Use a spring or <code>ease.out</code> for entrances, never a straight line.</p>
+
+<h2 id="play">Two ways to play: live or frame by frame</h2>
+<p>Write one <code>seek(t)</code> that draws film time <code>t</code>. Both modes call it.</p>
+<h3>Live (a viewer page)</h3>
+<p>The <code>Clock</code> drives <code>seek(t)</code> from <code>requestAnimationFrame</code>. While sound is playing, the picture follows the <strong>audio clock</strong> (<code>AudioContext.currentTime</code>), so the two can't drift; otherwise it follows <code>performance.now()</code>. <code>playLive</code> plays the soundtrack from any point: scrub to 3.2&nbsp;s and press play, and everything scheduled before 3.2&nbsp;s is skipped.</p>
+<pre><code>import { Clock } from "romp/core";
+import { playLive } from "romp/audio";
+import { cartoon } from "romp/audio/cartoon";
+
+const audio = new AudioContext();
+let live;
+const clock = new Clock({
+  seek, duration: 7.5, loop: true, audio,
+  onPlay: async (t) =&gt; { live = await playLive(audio, schedule, { from: t, extend: cartoon }); },
+  onStop: () =&gt; live?.stop(),
+});
+playButton.onclick = () =&gt; (clock.playing ? clock.pause() : clock.play());
+scrubber.oninput = () =&gt; clock.seek(+scrubber.value);   // restarts the sound there if playing</code></pre>
+<h3>Frame by frame (Remotion, or a page captured to MP4)</h3>
+<p>Read poses by frame and render the same schedule offline:</p>
+<pre><code>// in a Remotion component
+const pose = poseAt(body, useCurrentFrame());
+
+// the soundtrack, offline (deterministic: same schedule, same samples)
+import { renderOffline, renderWav } from "romp/audio";
+const buffer = await renderOffline(schedule, { duration: 7.5, extend: cartoon });
+export const render = () =&gt; renderWav(schedule, { duration: 7.5, extend: cartoon });   // for `romp sound`</code></pre>
+
+<h2 id="sound">Sound: one schedule</h2>
+<p>A soundtrack is a function that schedules every note and cue in <strong>film seconds</strong> through <code>at(t)</code>. Live, <code>at</code> maps film time to the context's time and returns <code>null</code> for anything already played; offline it's the identity.</p>
+<pre><code>import { Instruments, type Schedule } from "romp/audio";
+
+export const schedule: Schedule = (s, bus, at) =&gt; {
+  const band = new Instruments(s);          // pluck, kick, shaker, rhodes, piano, upright, rim, brush
+  for (let b = 0; b &lt; 16; b++) {
+    const t = at(b * 60 / 112); if (t == null) continue;
+    if (b % 2 === 0) band.kick(t, bus.drums, { vel: 0.22 });
+    band.shaker(t, bus.drums, { vel: 0.03, seed: b });
+  }
+  for (const hit of body.impacts) {          // the same impacts the picture reacts to
+    const t = at(hit.t); if (t == null) continue;
+    s.boing(t - 1 / 30, bus.sfx, { k: hit.speed / 900, big: size / 95 });   // a frame early
+  }
+};</code></pre>
+<ul>
+  <li><strong>The mix</strong> (<code>createMix</code>) has music, drums, sfx and voice buses with a shared room, a 70&nbsp;Hz high-pass, a low shelf and a glue compressor.</li>
+  <li><strong>The voices</strong> (<code>Synth</code>): marimba, bell, Karplus–Strong plucks, whooshes, taps, splashes, risers, thumps and more, all synthesised. <code>romp/audio/cartoon</code> adds <code>plop</code>, <code>boing</code>, <code>babble</code> (gibberish voices: <code>hero</code>, <code>squeaky</code>, <code>low</code>, <code>sleepy</code>, <code>playful</code>, … or your own <code>{ f0, swing, rate }</code>), <code>slurp</code>, <code>beep</code>, <code>ding</code>, <code>tock</code>, <code>pip</code>, <code>swish</code> and <code>scribble</code>.</li>
+  <li><strong>In key:</strong> set <code>s.harmony = (t) =&gt; pitchClassSet</code> and every tonal effect snaps to the chord sounding at that moment (<code>fitTo</code>).</li>
+</ul>
+<p>The rules worth keeping: <strong>restraint</strong> (only each beat's focal event gets a sound), <strong>one family</strong> (tonal effects on one voice, in the score's key), <strong>transients lead the picture by about a frame</strong> (<code>LEAD</code>), <strong>no identical repeats</strong> (every voice takes a seed), and <strong>keep the energy between 200&nbsp;Hz and 6&nbsp;kHz</strong> so it survives a phone speaker. <code>romp sound</code> normalises the result to −16&nbsp;LUFS.</p>
+
+<h2 id="check">The motion check</h2>
+<p>It steps every frame, follows each tracked element's on-screen centre, box, size and opacity, and flags:</p>
+<table>
+  <thead><tr><th>Issue</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td>pop</td><td>Appears or vanishes in frame at 30% or more of its largest size, and opaque. It should grow, fade or fly in.</td></tr>
+    <tr><td>strobe</td><td>Moves more than about 100&nbsp;px in one frame (scaled from an 886&nbsp;px-wide frame). At 30&nbsp;fps that reads as a jump.</td></tr>
+    <tr><td>teleport</td><td>Jumps more than about 300&nbsp;px while visible on both frames.</td></tr>
+    <tr><td>spike</td><td>Acceleration jumps far above its neighbours': a kink where two moves don't match speed.</td></tr>
+    <tr><td>cropped</td><td>Shown and on screen, but more than 25% of its own box is outside the frame for more than 0.5&nbsp;s in a row: a character's head cut off by the edge. Entering or leaving (its on-frame share only rises, or only falls) is fine. Tune with <code>croppedFraction</code> and <code>croppedSeconds</code>.</td></tr>
+  </tbody>
+</table>
+<p><strong>Exempt:</strong> real impacts (an element marked as at an impact, or <code>impacts</code> frames you pass), deliberate fast moves (<code>whips</code>, in seconds), frames where a transition covers the picture (<code>covered</code>), entrances and exits that fade, grow or shrink, <code>seamless</code> objects that swap in for an identical twin, and <code>allowCrop</code> objects that may run off the edge (<code>track(name, { allowCrop: true })</code>, <code>data-romp-allow-crop</code>, <code>userData.allowCrop</code> in three.js). The cropped check needs the frame's <code>width</code> and <code>height</code>; <code>romp check</code> and <code>motionReport</code> pass both.</p>
+<h3>Remotion or any DOM page</h3>
+<pre><code>import { track } from "romp/remotion";
+import { nearImpact } from "romp/core";
+
+&lt;div {...track("hero", { impact: nearImpact(hero.impacts, frame) })} style={…} /&gt;</code></pre>
+<pre><code>// check.tsx: the composition to check (or a function of --arg)
+export default (lang) =&gt; ({ component: MyVideo, props: { lang }, durationInFrames: 1527, fps: 30,
+  width: 1080, height: 1920, covered: [[4.2, 4.9]] });</code></pre>
+<pre><code>bunx romp check check.tsx --public public --arg '"en"'   # exit 1 on issues; --json for machines</code></pre>
+<p>On a page of your own, step your <code>seek(t)</code>, collect each frame with <code>collectDom(root)</code> and call <code>analyze(frames, { fps, width, height })</code>: the demo on the home page does exactly that.</p>
+<h3>three.js</h3>
+<pre><code>import { motionReport } from "romp/three";
+const { issues } = motionReport({ seek, scene, camera, fps: 30, W: 886, H: 1920, from: 0, to: 30, whips, covered });</code></pre>
+<p>Name the objects worth checking (<code>obj.name = "van"</code>); deliberate landings go in <code>obj.userData.impacts</code> (seconds), swapped twins set <code>userData.seamless</code>.</p>
+<h3>Anything else</h3>
+<p>Build <code>{ f, row: { name: { x, y, shown, onScreen, area, opacity, box? } } }</code> per frame and call <code>analyze(frames, { fps, width, height })</code>; <code>formatReport()</code> prints it.</p>
+<h3>The CLI</h3>
+<pre><code>romp check &lt;entry.tsx&gt; [--public dir] [--from s] [--to s] [--arg json] [--json]
+romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16]</code></pre>
+<p><code>romp check</code> bundles the entry with esbuild, plays it in headless Chromium with <code>@remotion/player</code> and seeks every frame. <code>romp sound</code> bundles a module exporting <code>render(arg)</code> (an <code>AudioBuffer</code> or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.</p>
+</div>
+
+    </div></main>
+    <footer class="foot"><div class="shell">romp 0.2.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+  </body>
+</html>

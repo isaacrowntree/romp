@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Changelog — romp</title>
+    <meta name="description" content="What changed in each romp release." />
+    <link rel="canonical" href="https://isaacrowntree.com/romp/changelog.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="romp" />
+    <meta property="og:url" content="https://isaacrowntree.com/romp/changelog.html" />
+    <meta property="og:title" content="Changelog — romp" />
+    <meta property="og:description" content="What changed in each romp release." />
+    <meta property="og:image" content="https://isaacrowntree.com/romp/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="romp: a wordmark of springy letters, a knocked-over p and a pile of hatted characters" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#f7f6fb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#13121b" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
+    <link rel="stylesheet" href="style.css?v=74e241cc" />
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.2.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check"}
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="masthead">
+      <div class="shell masthead__inner">
+        <a class="wordmark" href="./">r<span>o</span>mp</a>
+        <nav aria-label="Sections">
+          <a href="./">Home</a>
+          <a href="./guides.html">Guides</a>
+          <a href="./api.html">API</a>
+          <a href="./changelog.html" aria-current="page">Changelog</a>
+          <a href="https://github.com/isaacrowntree/romp">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main"><div class="shell">
+<section class="hero"><h1>Changelog</h1><p class="hero__lede">Every release, newest first. Versions follow SemVer.</p></section>
+<div class="prose changelog"><p>All notable changes to this project are documented here. Format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>; versions follow <a href="https://semver.org/">SemVer</a>.</p>
+<h2 id="0-2-0-2026-11-18">[0.2.0] — 2026-11-18</h2>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong>Motion check: <code>cropped</code>.</strong> A tracked object that's shown and on screen but has more than <code>croppedFraction</code> (default 0.25) of its own box outside the frame for more than <code>croppedSeconds</code> (default 0.5 s) in a row. Runs where it's entering or leaving (its on-frame share only rises or only falls) and covered frames are exempt; opt out per object with <code>track(name, { allowCrop: true })</code> / <code>data-romp-allow-crop</code>, <code>userData.allowCrop</code> in three.js, or <code>allowCrop</code> names. <code>collectDom</code> and <code>motionReport</code> now report each object's <code>box</code>; <code>inFrameShare()</code> and <code>screenBox()</code> are exported.</li>
+<li><code>poseAt</code> / <code>poseAtTime</code> take <code>{ discrete: "nearest" | "previous" }</code> for how booleans and other non-numeric fields blend between baked frames.</li>
+<li><code>Stage.add(actor)</code> sets <code>actor.stage</code> before <code>build()</code>; <code>Stage.pose(t)</code> hands every actor with an <code>apply(pose, t)</code> its interpolated pose, NaN poses as <code>{ shown: false }</code>.</li>
+<li><code>Drop</code>: <code>foot</code> (a contact circle), <code>spinAt</code> and <code>tilt</code> that unwind to zero at touchdown, <code>z: [from, to]</code> depth drift arrested on contact, <code>rock</code> direction, <code>ledge</code> with a <code>frame</code> offset; <code>flight(frame)</code> and <code>framePose(frame)</code>. <code>Body</code> gains <code>gravityScale</code>; <code>Leap</code> gains <code>gravity</code> and <code>frame</code>.</li>
+<li>A docs site at https://isaacrowntree.com/romp/: a live demo (a springy wordmark knocked over, a pile of hatted characters whose hats follow through with <code>jiggleParts</code>, play/pause/scrub with sound on the audio clock, the same soundtrack rendered offline to a WAV, and the motion check with a "plant a bug" toggle), guides, the API reference (checked against the exports at build time) and this changelog. The demo's source is <code>examples/demo/</code>.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><code>romp check</code> and <code>motionReport</code> now pass the frame's height, so the cropped check runs by default (this is why it's 0.2.0): an object parked half off the edge that passed before is now reported.</li>
+</ul>
+<h2 id="0-1-1-2026-11-18">[0.1.1] — 2026-11-18</h2>
+<h3 id="added">Added</h3>
+<ul>
+<li><code>jiggleParts(parts, dt, strength?, lag?)</code>: secondary motion for several parts at once, each lagging the one before.</li>
+<li><code>romp check --arg &lt;json&gt;</code>: the entry may export a function of the argument, so one entry covers several cuts (languages, variants).</li>
+</ul>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li><code>bin/romp.mjs</code> is executable, so <code>bunx romp</code> / <code>npx romp</code> work after installing from GitHub.</li>
+</ul>
+<h2 id="0-1-0-2026-11-18">[0.1.0] — 2026-11-18</h2>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong>romp/core</strong>: a planck.js (Box2D) <code>Stage</code> that bakes a scene once at a fixed 240 Hz and stores one pose per frame, in screen space (y down) or y-up; the actor protocol (<code>build</code> / <code>control</code> / <code>sample</code>); preset actors <code>Body</code> (with recorded impacts), <code>SpringyBody</code> (welds where it lands on its ground), <code>Drop</code> and <code>Leap</code>; collision layers; <code>poseAt</code> (frames) and <code>poseAtTime</code> (seconds).</li>
+<li>Character motion as pure functions: <code>impactResponse</code> (squash, blink, follow-through and jiggle from real impacts), <code>landing</code>, <code>hop</code>, <code>idle</code>, <code>blinkAt</code>, <code>boing</code>, <code>jiggle</code>, <code>rock</code>, <code>nearImpact</code>; curves <code>ease</code>, <code>spring</code>, <code>ringOut</code>, <code>stagger</code>.</li>
+<li><code>Clock</code>: real-time playback driving <code>seek(t)</code> on requestAnimationFrame, following the audio clock while sound plays.</li>
+<li><strong>romp/check</strong>: the motion check (<code>analyze</code>: pops, strobes, teleports, spikes, with whips, covered frames, impacts and seamless swaps exempt), <code>formatReport</code>, and <code>collectDom</code> for <code>data-romp</code> elements.</li>
+<li><strong>romp/remotion</strong> (<code>track</code>) and <strong>romp/three</strong> (<code>motionReport</code>).</li>
+<li><strong>romp/audio</strong>: synthesised voices and instruments, <code>createMix</code>, and one schedule played live (<code>playLive</code>) or rendered offline (<code>renderOffline</code>, <code>renderWav</code>); <strong>romp/audio/cartoon</strong> voices.</li>
+<li>CLI: <code>romp check</code> (Remotion compositions in headless Chromium) and <code>romp sound</code> (render a schedule to a loudness-normalised WAV).</li>
+<li>Live demo page in <code>docs/</code> and a generated hero GIF.</li>
+</ul></div>
+    </div></main>
+    <footer class="foot"><div class="shell">romp 0.2.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+  </body>
+</html>

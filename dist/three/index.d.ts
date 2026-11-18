@@ -11,6 +11,13 @@ import { type Report } from "../check/analyze.js";
 export { analyze, formatReport, type Report, type Issue } from "../check/analyze.js";
 /** On-screen area (px²) of an object: each mesh's own bounding box carried
  * through its world matrix (oriented: a card hinged flat stays thin), unioned on screen. */
+/** An object's projected on-screen box (px, may extend past the frame), unioned over its meshes. */
+export declare function screenBox(o: THREE.Object3D, camera: THREE.Camera, W: number, H: number): {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+} | null;
 export declare function screenArea(o: THREE.Object3D, camera: THREE.Camera, W: number, H: number): number;
 /** The most opaque material in an object (shader `opacity` uniforms included). */
 export declare function opacityOf(o: THREE.Object3D): number;

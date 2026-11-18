@@ -14,6 +14,7 @@ export function track(name, o = {}) {
         "data-romp": name,
         "data-romp-impact": o.impact ? "1" : undefined,
         "data-romp-seamless": o.seamless ? "1" : undefined,
+        "data-romp-allow-crop": o.allowCrop ? "1" : undefined,
     };
 }
 //# sourceMappingURL=index.js.map

@@ -17,6 +17,24 @@ const corner = new THREE.Vector3();
 
 /** On-screen area (px²) of an object: each mesh's own bounding box carried
  * through its world matrix (oriented: a card hinged flat stays thin), unioned on screen. */
+/** An object's projected on-screen box (px, may extend past the frame), unioned over its meshes. */
+export function screenBox(o: THREE.Object3D, camera: THREE.Camera, W: number, H: number): { x0: number; y0: number; x1: number; y1: number } | null {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  o.traverseVisible((m) => {
+    const g = (m as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
+    if (!g) return;
+    if (!g.boundingBox) g.computeBoundingBox();
+    box.copy(g.boundingBox!);
+    if (box.isEmpty()) return;
+    for (let i = 0; i < 8; i++) {
+      corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).applyMatrix4(m.matrixWorld).project(camera);
+      x0 = Math.min(x0, corner.x); x1 = Math.max(x1, corner.x); y0 = Math.min(y0, corner.y); y1 = Math.max(y1, corner.y);
+    }
+  });
+  if (!(x1 > x0)) return null;
+  return { x0: ((x0 + 1) * W) / 2, x1: ((x1 + 1) * W) / 2, y0: ((1 - y1) * H) / 2, y1: ((1 - y0) * H) / 2 };
+}
+
 export function screenArea(o: THREE.Object3D, camera: THREE.Camera, W: number, H: number): number {
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   o.traverseVisible((m) => {
@@ -80,11 +98,13 @@ export function motionReport({ seek, scene, camera, fps, W, H, from = 0, to = 3.
         area: shown ? screenArea(o, camera, W, H) : 0,
         opacity: shown ? opacityOf(o) : 0,
         seamless: !!o.userData.seamless,
+        box: shown ? screenBox(o, camera, W, H) ?? undefined : undefined,
+        allowCrop: !!o.userData.allowCrop,
       };
     }
     frames.push({ f, row });
   }
   const impacts: Record<string, number[]> = {};
   for (const o of named) if (o.userData.impacts) impacts[o.name] = (o.userData.impacts as number[]).map((t) => Math.round(t * fps));
-  return analyze(frames, { fps, width: W, whips, covered, impacts });
+  return analyze(frames, { fps, width: W, height: H, whips, covered, impacts });
 }

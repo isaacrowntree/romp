@@ -1,0 +1,36 @@
+# romp
+
+> Physics-baked character motion, a motion check and synthesised sound for videos made in code: Remotion, three.js or any page with a seek(t), played live on requestAnimationFrame or rendered frame by frame. TypeScript, MIT.
+
+Install from GitHub (not on npm yet): `bun add github:isaacrowntree/romp planck`. The CLI also needs `esbuild` and `playwright`. Docs: https://isaacrowntree.com/romp/ · Source: https://github.com/isaacrowntree/romp
+
+## romp/core
+- `new Stage({ pxPerMetre?, gravity?, yDown? })`: one planck.js (Box2D) world. `ground(points, { layer? })`, `add(actor)` (sets `actor.stage`, calls `build`), `bake({ frames | duration, fps?, hz? = 240 })` once, `pose(t)` calls each actor's `apply(pose, t)` (NaN poses arrive as `{ shown: false }`), `get(id)`.
+- Actor protocol: `build(stage)`, `control?(t, dt)`, `sample(t)` → pose, `apply?(pose, t)`.
+- `Body({ id, x, y (feet), w, h, shape?, spawn?, vx?, vy?, spin?, restitution?, upright?, layer?, mask?, gravityScale? })`: records `impacts` `{ frame, t, speed, vx }`; `landed`.
+- `SpringyBody({ ...Body, ground, groundY, hz?, damping? })`: welds where it first lands on `ground`; knocked over, it wobbles back.
+- `Drop({ ...Body, foot?, ledge?, frame?, spinAt?, tilt?, z?: [from, to], rock? })`: upright drop; `flight(frame)` → `{ u, spin, tilt, z, rockDir }` (all at rest at touchdown); `framePose(frame)`.
+- `Leap({ id, x, y, vx, vy, surface, size?, spawn?, gravity?, frame? })`: ballistic leap through a surface; `crossings`.
+- `poseAt(actor, frame, { discrete?: "nearest" | "previous" })`, `poseAtTime(actor, seconds, fps?, opts?)`, `baked(key, build)`, `LAYER`.
+- Motion: `impactResponse(body, frame, seed?)` → `{ squashX, squashY, tilt, lift, blink, jiggle }`; `jiggle(dt, strength)`; `jiggleParts(parts, dt, strength?, lag?)`; `landing`, `hop`, `idle`, `blinkAt`, `boing`, `rock`, `nearImpact`; curves `ease`, `spring`, `ringOut`, `stagger`, `SPRING`.
+- `Clock({ seek, duration, loop?, audio?, onPlay?(t), onStop?() })`: live playback; follows the AudioContext clock while sound plays. `play(from?)`, `pause()`, `seek(t)`.
+
+## romp/check
+- `analyze(frames, { fps?, width?, height?, whips?, covered?, impacts?, seamless?, croppedFraction?, croppedSeconds?, allowCrop? })` → `{ tracked, frames, issues }`. Issues: pop (appears/vanishes in frame at ≥30% of its largest size, opaque), strobe (> ~100 px per frame at 886 px wide), teleport (> ~300 px), spike (acceleration far above its neighbours'), cropped (more than 25% of its box outside the frame for more than 0.5 s, not while entering or leaving; needs width and height). Exempt: impacts, whips, covered frames, fades/grows, seamless, allowCrop.
+- `formatReport(report, fps?)`, `collectDom(root)` (every `[data-romp]` element, with its box), `inFrameShare(box, W, H)`.
+
+## romp/remotion
+- `track(name, { impact?, seamless?, allowCrop? })` → data attributes for `romp check`.
+
+## romp/three
+- `motionReport({ seek, scene, camera, fps, W, H, from?, to?, whips?, covered? })` (userData: impacts, seamless, allowCrop), `screenBox`, `screenArea`, `opacityOf`.
+
+## romp/audio
+- `Synth` (voices: marimba, bell, whoosh, tap, splash, riser, thump, click, engine, reverb…), `Instruments` (pluck, kick, shaker, rhodes, piano, upright, rim, brush), `createMix(synth, { levels?, sends?, room? })` → buses music/drums/sfx/voice/master.
+- A `Schedule` is `(synth, buses, at) => void`; `at(filmSeconds)` → context time or null (already played).
+- `renderOffline(schedule, { duration, extend? })` → AudioBuffer; `renderWav(...)` → base64 WAV; `playLive(ctx, schedule, { from?, extend? })` → `{ origin, stop() }`. `fitTo`, `midiHz`, `rng`, `wavBase64`, `LEAD` (1/30 s).
+- `romp/audio/cartoon`: `cartoon` (extend with plop, boing, babble, slurp, beep, ding, tock, pip, swish, scribble) and `VOICES`.
+
+## CLI
+- `romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--json]`: plays a Remotion composition in headless Chromium, every frame; exit 1 on issues. The entry default-exports `{ component, props?, durationInFrames, fps, width, height, whips?, covered? }` or a function of `--arg` returning one.
+- `romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]`: renders a module's `render(arg)` in headless Chromium and loudness-normalises it.

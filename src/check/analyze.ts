@@ -9,12 +9,19 @@
  *   teleport  visible on both frames and jumped more than ~300 px
  *   spike     acceleration jumps far above its neighbours': a kink in the curve
  *             (a missing ease, two moves handed off at different speeds)
+ *   cropped   shown and on screen, but more than `croppedFraction` (25%) of its
+ *             own box is outside the frame for more than `croppedSeconds`
+ *             (0.5 s) in a row: a character's head cut off by the edge. Runs
+ *             where it's entering or leaving (its on-frame share only rises or
+ *             only falls) are fine; needs the collector's `box` and the
+ *             frame's `width` and `height`
  *
  * Exempt: frames inside `whips` (deliberate fast moves) skip speed checks;
  * frames inside `covered` (something fills the frame, or a transition hides the
  * scene) skip everything; impacts (a real landing) aren't spikes; entrances
  * and exits that fade, grow or shrink aren't spikes; `seamless` objects (a
- * swap for an identical twin) aren't pops.
+ * swap for an identical twin) aren't pops; `allowCrop` objects (a deliberate
+ * close-up, a background running off the edge) aren't cropped.
  *
  * It only reads positions, so it works for anything you can seek: a realtime
  * page's seek(t), a frame renderer, three.js or the DOM (see collectDom and
@@ -35,6 +42,10 @@ export interface Sample {
   impact?: boolean;
   /** never flag as a pop */
   seamless?: boolean;
+  /** its own on-screen box in frame px (may extend past the frame), for the cropped check */
+  box?: { x0: number; y0: number; x1: number; y1: number };
+  /** never flag as cropped */
+  allowCrop?: boolean;
 }
 
 export interface FrameRow {
@@ -45,7 +56,7 @@ export interface FrameRow {
 export interface Issue {
   frame: number;
   name: string;
-  kind: "pop" | "strobe" | "teleport" | "spike";
+  kind: "pop" | "strobe" | "teleport" | "spike" | "cropped";
   detail: string;
 }
 
@@ -53,6 +64,14 @@ export interface AnalyzeOptions {
   fps?: number;
   /** frame width in px: thresholds scale from 886 px unless given */
   width?: number;
+  /** frame height in px (with width, enables the cropped check) */
+  height?: number;
+  /** cropped: the share of an object's box allowed outside the frame (default 0.25) */
+  croppedFraction?: number;
+  /** cropped: how long it may stay over that before it's flagged (default 0.5 s) */
+  croppedSeconds?: number;
+  /** names never checked for cropping */
+  allowCrop?: string[];
   /** [from, to] seconds of deliberate fast moves */
   whips?: [number, number][];
   /** [from, to] seconds where the scene is hidden */
@@ -116,8 +135,56 @@ export function analyze(frames: FrameRow[], o: AnalyzeOptions = {}): Report {
       if (ai > 3 * typical + 4 * scale) issues.push({ frame: b.f, name, kind: "spike", detail: `accel ${ai.toFixed(1)} px/f² vs ~${typical.toFixed(1)} around it` });
     }
   }
+  if (o.width && o.height) issues.push(...cropped(frames, names, o, fps, hidden));
   issues.sort((a, b) => a.frame - b.frame);
   return { tracked: names, frames: frames.length, issues };
+}
+
+/** The share of a box inside a W×H frame (0..1). */
+export function inFrameShare(b: { x0: number; y0: number; x1: number; y1: number }, W: number, H: number): number {
+  const area = Math.max(0, b.x1 - b.x0) * Math.max(0, b.y1 - b.y0);
+  if (area <= 0) return 1;
+  const w = Math.max(0, Math.min(b.x1, W) - Math.max(b.x0, 0));
+  const h = Math.max(0, Math.min(b.y1, H) - Math.max(b.y0, 0));
+  return (w * h) / area;
+}
+
+function cropped(frames: FrameRow[], names: string[], o: AnalyzeOptions, fps: number, hidden: (f: number) => boolean): Issue[] {
+  const W = o.width!, H = o.height!;
+  const limit = 1 - (o.croppedFraction ?? 0.25);
+  const minRun = Math.round((o.croppedSeconds ?? 0.5) * fps);
+  const out: Issue[] = [];
+  for (const name of names) {
+    if ((o.allowCrop ?? []).includes(name)) continue;
+    // Runs of frames where it's shown, on screen, not covered and too far out of frame.
+    let run: { f: number; share: number }[] = [];
+    const flush = () => {
+      if (run.length > minRun) {
+        const eps = 0.005;
+        const rising = run.every((p, k) => k === 0 || p.share >= run[k - 1].share - eps);
+        const falling = run.every((p, k) => k === 0 || p.share <= run[k - 1].share + eps);
+        const moving = Math.abs(run[run.length - 1].share - run[0].share) > 0.02;
+        if (!(moving && (rising || falling))) {
+          const worst = Math.min(...run.map((p) => p.share));
+          out.push({ frame: run[0].f, name, kind: "cropped", detail: `${Math.round((1 - worst) * 100)}% of it outside the frame for ${(run.length / fps).toFixed(2)} s` });
+        }
+      }
+      run = [];
+    };
+    for (const { f, row } of frames) {
+      const p = row[name];
+      if (!p || p.allowCrop) {
+        flush();
+        if (p?.allowCrop) break;
+        continue;
+      }
+      const share = p.box ? inFrameShare(p.box, W, H) : 1;
+      if (p.shown && p.onScreen && !hidden(f) && share < limit) run.push({ f, share });
+      else flush();
+    }
+    flush();
+  }
+  return out;
 }
 
 /** Format a report for a terminal. */

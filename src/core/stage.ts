@@ -49,6 +49,10 @@ export interface Actor<P extends object = any> {
   build(stage: Stage): void;
   control?(t: number, dt: number): void;
   sample(t: number): P;
+  /** optional: draw a pose (Stage.pose(t) calls it, e.g. onto a three.js object) */
+  apply?(pose: P, t: number): void;
+  /** set by Stage.add() before build() */
+  stage?: Stage;
   /** filled by bake(): one pose per frame */
   frames?: P[];
   /** optional name for lookups */
@@ -94,6 +98,7 @@ export class Stage {
   }
 
   add<A extends Actor>(actor: A): A {
+    actor.stage = this;
     actor.build(this);
     this.actors.push(actor);
     return actor;
@@ -120,6 +125,20 @@ export class Stage {
     return this;
   }
 
+  /**
+   * The live-viewer convenience: every actor's interpolated pose at time `t`
+   * (seconds) handed to its `apply(pose, t)`. A pose with a NaN anywhere is
+   * passed as `{ shown: false }` (a NaN position corrupts a renderer's depth
+   * sort, so it's treated as hidden).
+   */
+  pose(t: number, o: PoseOptions = {}): void {
+    for (const a of this.actors) {
+      if (!a.apply || !a.frames?.length) continue;
+      const p = rawPoseAt(a, t * this.fps, o);
+      a.apply(hasNaN(p) ? ({ shown: false } as never) : p, t);
+    }
+  }
+
   get<A extends Actor = Body>(id: string): A {
     const a = this.actors.find((x) => x.id === id);
     if (!a) throw new Error(`romp: no actor "${id}"`);
@@ -127,30 +146,42 @@ export class Stage {
   }
 }
 
-/** An actor's pose at a fractional FRAME (offline renderers: Remotion, seek(t)×fps). */
-export function poseAt<P extends object>(a: Actor<P>, frame: number): P {
+/** How non-numeric fields (booleans, strings, `shown`) blend between two
+ * baked frames: "nearest" switches at the halfway point (the default),
+ * "previous" holds the earlier frame's value until the next frame. */
+export interface PoseOptions {
+  discrete?: "nearest" | "previous";
+}
+
+function rawPoseAt<P extends object>(a: Actor<P>, frame: number, o: PoseOptions = {}): P {
   const fr = a.frames;
   if (!fr || fr.length === 0) throw new Error("romp: bake() the stage before reading poses");
   const i = Math.max(0, Math.min(fr.length - 1, Math.floor(frame)));
   const j = Math.min(fr.length - 1, i + 1);
   const x = Math.min(1, Math.max(0, frame - i));
-  const p = blend(fr[i], fr[j], x) as P;
+  return blend(fr[i], fr[j], x, o.discrete ?? "nearest") as P;
+}
+
+/** An actor's pose at a fractional FRAME (offline renderers: Remotion, seek(t)×fps). */
+export function poseAt<P extends object>(a: Actor<P>, frame: number, o: PoseOptions = {}): P {
+  const p = rawPoseAt(a, frame, o);
   return hasNaN(p) ? ({ ...p, shown: false } as P) : p;
 }
 
 /** An actor's pose at a time in SECONDS (realtime viewers), interpolated. */
-export function poseAtTime<P extends object>(a: Actor<P>, t: number, fps = 30): P {
-  return poseAt(a, t * fps);
+export function poseAtTime<P extends object>(a: Actor<P>, t: number, fps = 30, o: PoseOptions = {}): P {
+  return poseAt(a, t * fps, o);
 }
 
-function blend(a: unknown, b: unknown, x: number): unknown {
+function blend(a: unknown, b: unknown, x: number, mode: "nearest" | "previous"): unknown {
+  const pick = () => (mode === "previous" ? (x < 1 ? a : b) : x < 0.5 ? a : b);
   if (typeof a === "number") return a + ((b as number) - a) * x;
-  if (typeof a !== "object" || a === null) return x < 0.5 ? a : b;
-  if (Array.isArray(a)) return a.map((v, k) => blend(v, (b as unknown[])[k], x));
+  if (typeof a !== "object" || a === null) return pick();
+  if (Array.isArray(a)) return a.map((v, k) => blend(v, (b as unknown[])[k], x, mode));
   const A = a as Record<string, unknown>, B = b as Record<string, unknown>;
-  if (A.shown === false || B.shown === false) return x < 0.5 ? a : b;
+  if (A.shown === false || B.shown === false) return pick();
   const out: Record<string, unknown> = {};
-  for (const k of Object.keys(A)) out[k] = blend(A[k], B[k], x);
+  for (const k of Object.keys(A)) out[k] = blend(A[k], B[k], x, mode);
   return out;
 }
 
@@ -201,6 +232,8 @@ export interface BodyOptions {
   layer?: number;
   mask?: number;
   bullet?: boolean;
+  /** multiplies the stage's gravity for this body (default 1): scaled-down props fall snappier with > 1 */
+  gravityScale?: number;
 }
 
 /**
@@ -213,8 +246,8 @@ export class Body implements Actor<BodyPose> {
   body!: PlanckBody;
   impacts: Impact[] = [];
   frames?: BodyPose[];
-  protected stage!: Stage;
   private lastV = 0;
+  stage!: Stage;
   constructor(readonly o: BodyOptions) {
     this.id = o.id;
   }
@@ -233,6 +266,7 @@ export class Body implements Actor<BodyPose> {
       angularDamping: o.angularDamping ?? 5,
       fixedRotation: !!o.upright,
       bullet: o.bullet ?? false,
+      gravityScale: o.gravityScale ?? 1,
     });
     const hw = stage.m(o.w / 2), hh = stage.m(o.h / 2);
     let shape;
@@ -311,14 +345,93 @@ export class SpringyBody extends Body {
  * compression on each impact are the caller's to draw, from `impacts`
  * (see `rock()` in core/motion). Optionally lands on its own ledge.
  */
+export interface DropOptions extends BodyOptions {
+  /** its own landing edge (a hillside it stands on), in physics coordinates (px) */
+  ledge?: { x0: number; x1: number; y: number };
+  /** contact foot: a small circle of this radius (px) is all that touches the
+   * ground, its bottom at the body's feet (a pin's tip). Default: the whole body. */
+  foot?: number;
+  /** subtracted from the physics pose to place it (`framePose`): lay a ledge far
+   * from everything else in the world, then draw it in its parent's frame */
+  frame?: { x: number; y: number };
+  /** spin and tilt (radians) at spawn, unwinding at a constant rate to 0 at touchdown */
+  spinAt?: number;
+  tilt?: number;
+  /** depth at spawn and at touchdown, at a constant velocity, arrested on contact */
+  z?: [number, number];
+  /** which way an impact rocks it when it lands straight down (a sideways landing wins) */
+  rock?: 1 | -1;
+}
+
+/** What `Drop.flight(frame)` gives: the in-flight values that stop at touchdown. */
+export interface DropFlight {
+  /** 0 at spawn … 1 at touchdown (and after) */
+  u: number;
+  spin: number;
+  tilt: number;
+  z: number | null;
+  /** the rock direction for the latest impact: its sideways speed's sign, else `rock` */
+  rockDir: 1 | -1;
+}
+
+/**
+ * Something dropped or thrown onto a surface, staying upright (fixed rotation):
+ * a real fall and a small damped hop. Contact arrests everything: spin, tilt
+ * and depth drift reach their rest exactly at touchdown (`flight()`), and the
+ * rock about the contact point is the caller's to draw (`rock()` in
+ * core/motion, with `flight().rockDir`). Optionally lands on its own ledge.
+ */
 export class Drop extends Body {
-  constructor(o: BodyOptions & { ledge?: { x0: number; x1: number; y: number } }) {
+  constructor(o: DropOptions) {
     super({ shape: "circle", upright: true, restitution: 0.2, bullet: true, ...o });
+  }
+  private get d() {
+    return this.o as DropOptions;
   }
   build(stage: Stage) {
     super.build(stage);
-    const l = (this.o as { ledge?: { x0: number; x1: number; y: number } }).ledge;
+    const o = this.d;
+    if (o.foot != null) {
+      // Replace the body's shape with the foot: a small circle at the contact point.
+      for (let f = this.body.getFixtureList(); f; ) {
+        const next = f.getNext();
+        this.body.destroyFixture(f);
+        f = next;
+      }
+      const sgn = stage.yDown ? 1 : -1;
+      const half = o.shape === "circle" ? o.w / 2 : o.h / 2;
+      this.body.createFixture(Circle(Vec2(0, stage.m(sgn * (half - o.foot))), stage.m(o.foot)), {
+        density: o.density ?? 20,
+        friction: o.friction ?? 1.2,
+        restitution: o.restitution ?? 0.2,
+        filterCategoryBits: o.layer ?? LAYER.A,
+        filterMaskBits: o.mask ?? 0xffff,
+      });
+    }
+    const l = o.ledge;
     if (l) stage.world.createBody().createFixture(Edge(stage.v(l.x0, l.y), stage.v(l.x1, l.y)), { friction: 1.2, filterCategoryBits: LAYER.FLOOR });
+  }
+  /** Spin, tilt, depth and rock direction at a (fractional) frame. */
+  flight(frame: number): DropFlight {
+    const o = this.d;
+    const start = this.spawnFrame;
+    const land = this.landed;
+    const u = Number.isFinite(land) && land > start ? Math.min(1, Math.max(0, (frame - start) / (land - start))) : frame >= land ? 1 : 0;
+    const last = [...this.impacts].reverse().find((h) => h.frame <= frame);
+    const side = last && Math.abs(last.vx ?? 0) > 3 ? (-Math.sign(last.vx!) as 1 | -1) : null;
+    return {
+      u,
+      spin: (o.spinAt ?? 0) * (1 - u),
+      tilt: (o.tilt ?? 0) * (1 - u),
+      z: o.z ? o.z[0] + (o.z[1] - o.z[0]) * u : null,
+      rockDir: side ?? o.rock ?? 1,
+    };
+  }
+  /** The pose placed in its parent's frame (physics pose minus `frame`). */
+  framePose(frame: number, po: PoseOptions = {}): BodyPose {
+    const p = poseAt(this, frame, po);
+    const off = this.d.frame;
+    return off ? { ...p, x: p.x - off.x, y: p.y - off.y } : p;
   }
 }
 
@@ -338,14 +451,15 @@ export class Leap implements Actor<LeapPose> {
   body!: PlanckBody;
   frames?: LeapPose[];
   crossings: { frame: number; t: number; x: number; out: boolean; vx: number; vy: number }[] = [];
-  private stage!: Stage;
+  stage!: Stage;
   private above = false;
-  constructor(readonly o: { id: string; x: number; y: number; vx: number; vy: number; surface: number; size?: number; spawn?: number }) {
+  /** `gravity` scales the stage's gravity (default 1); `frame` is subtracted from the pose to place it */
+  constructor(readonly o: { id: string; x: number; y: number; vx: number; vy: number; surface: number; size?: number; spawn?: number; gravity?: number; frame?: { x: number; y: number } }) {
     this.id = o.id;
   }
   build(stage: Stage) {
     this.stage = stage;
-    this.body = stage.world.createDynamicBody({ position: stage.v(this.o.x, this.o.y), active: (this.o.spawn ?? 0) <= 0 });
+    this.body = stage.world.createDynamicBody({ position: stage.v(this.o.x, this.o.y), active: (this.o.spawn ?? 0) <= 0, gravityScale: this.o.gravity ?? 1 });
     this.body.createFixture(Circle(stage.m((this.o.size ?? 60) / 2)), { density: 10, isSensor: true, filterMaskBits: 0 });
     this.body.setLinearVelocity(stage.v(this.o.vx, this.o.vy));
   }
@@ -366,6 +480,7 @@ export class Leap implements Actor<LeapPose> {
   sample(): LeapPose {
     if (!this.body.isActive()) return { shown: false, x: 0, y: 0, angle: 0, heading: 0, speed: 0 };
     const p = this.body.getPosition(), v = this.body.getLinearVelocity();
-    return { shown: true, x: this.stage.px(p.x), y: this.stage.px(p.y), angle: 0, heading: Math.atan2(v.y, v.x), speed: this.stage.px(Math.hypot(v.x, v.y)) };
+    const off = this.o.frame ?? { x: 0, y: 0 };
+    return { shown: true, x: this.stage.px(p.x) - off.x, y: this.stage.px(p.y) - off.y, angle: 0, heading: Math.atan2(v.y, v.x), speed: this.stage.px(Math.hypot(v.x, v.y)) };
   }
 }

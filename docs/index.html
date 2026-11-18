@@ -1,38 +1,107 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>romp: physics-baked character motion</title>
-<meta name="description" content="Physics-baked character motion, a motion check and synthesised sound for videos made in code.">
-<style>
-  :root { --bg: #FAF6FF; --ink: #24163A; --mute: #6F6286; --accent: #7B4FD6; --card: #fff; --line: #EBE3F6; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #150D22; --ink: #F3ECFF; --mute: #B8A8D6; --accent: #B18AF0; --card: #21163A; --line: #352752; } }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 760px; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-left)) 64px; }
-  h1 { font-size: 44px; margin: 0 0 4px; letter-spacing: -0.02em; }
-  p { color: var(--mute); margin: 0 0 18px; }
-  canvas { width: 100%; max-width: 720px; aspect-ratio: 1; display: block; border-radius: 20px; border: 1px solid var(--line); background: #FAF6FF; }
-  .row { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0; }
-  button { font: 600 16px system-ui; padding: 12px 20px; border-radius: 999px; border: 0; background: var(--accent); color: #fff; cursor: pointer; min-height: 44px; }
-  button.ghost { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
-  pre { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; white-space: pre-wrap; font: 13px/1.5 ui-monospace, Menlo, monospace; min-height: 3em; }
-  a { color: var(--accent); }
-</style>
-</head>
-<body>
-<main>
-  <h1>romp</h1>
-  <p>Physics-baked character motion, a motion check and synthesised sound for videos made in code. The pile below is simulated once and read every frame; each landing's squash, antenna wobble and boing come from its real impact speed.</p>
-  <canvas id="stage" width="720" height="720"></canvas>
-  <div class="row">
-    <button id="play">Play with sound</button>
-    <button id="check" class="ghost">Run the motion check</button>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>romp — physics-baked character motion and sound for videos made in code</title>
+    <meta name="description" content="romp makes videos made in code move and sound hand-animated: characters fall and pile up in a planck.js world baked once at 240 Hz, every impact drives the squash and the boing, a motion check catches pops and kinks, and the sound is synthesised, live or offline. TypeScript, MIT." />
+    <link rel="canonical" href="https://isaacrowntree.com/romp/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="romp" />
+    <meta property="og:url" content="https://isaacrowntree.com/romp/" />
+    <meta property="og:title" content="romp — physics-baked character motion and sound for videos made in code" />
+    <meta property="og:description" content="romp makes videos made in code move and sound hand-animated: characters fall and pile up in a planck.js world baked once at 240 Hz, every impact drives the squash and the boing, a motion check catches pops and kinks, and the sound is synthesised, live or offline. TypeScript, MIT." />
+    <meta property="og:image" content="https://isaacrowntree.com/romp/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="romp: a wordmark of springy letters, a knocked-over p and a pile of hatted characters" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#f7f6fb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#13121b" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
+    <link rel="stylesheet" href="style.css?v=74e241cc" />
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.2.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check"}
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="masthead">
+      <div class="shell masthead__inner">
+        <a class="wordmark" href="./">r<span>o</span>mp</a>
+        <nav aria-label="Sections">
+          <a href="./" aria-current="page">Home</a>
+          <a href="./guides.html">Guides</a>
+          <a href="./api.html">API</a>
+          <a href="./changelog.html">Changelog</a>
+          <a href="https://github.com/isaacrowntree/romp">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main"><div class="shell">
+<section class="hero">
+  <h1>Physics-baked character motion and sound for videos made in&nbsp;code</h1>
+  <p class="hero__lede">Characters that fall, pile up or get knocked over are <strong>rigid bodies baked once at 240&nbsp;Hz</strong>, so every frame reads the same motion, live in a browser or rendered frame by frame. Each landing's speed sizes <strong>the squash on screen and the boing on the soundtrack</strong>. A <strong>motion check</strong> fails your build on pops, strobes, teleports, kinks and characters cropped by the edge. The sound is <strong>synthesised</strong>: nothing to license.</p>
+  <div class="hero__actions">
+    <a class="btn btn--primary" href="guides.html">Read the guides</a>
+    <a class="btn btn--quiet" href="https://github.com/isaacrowntree/romp">Source on GitHub</a>
   </div>
-  <pre id="report">The motion check report shows here.</pre>
-  <p><a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · MIT</p>
-</main>
-<script src="./demo.js"></script>
-</body>
+  <div class="badges"><span>TypeScript</span><span>Remotion · three.js · any seek(t)</span><span>MIT</span></div>
+</section>
+
+<section class="demo" aria-labelledby="demo-h">
+  <h2 id="demo-h" style="margin-top:0">Try it</h2>
+  <div id="romp-demo">
+    <noscript><img src="hero.gif" alt="The romp wordmark drops onto a shelf, a small character knocks the p over and it springs back, then five hatted characters drop into a pile"></noscript>
+  </div>
+  <p class="demo__note">Everything above is read from one simulation baked when the page loads. <strong>Play with sound</strong> runs it live on the audio clock (scrub, then play: the sound starts where you are). <strong>Render WAV offline</strong> renders the same schedule through an OfflineAudioContext. <strong>Run the motion check</strong> steps every frame of the real elements; tick <strong>Plant a bug</strong> to watch it catch a sticker that pops in at full size.</p>
+</section>
+
+<section class="prose">
+  <h2>What's in it</h2>
+</section>
+<div class="grid">
+  <div class="card"><h3>romp/core</h3><p>A planck.js (Box2D) <code>Stage</code> baked once per scene, bodies that record their impacts, springy letters that wobble back, and the motion vocabulary: <code>impactResponse</code>, <code>landing</code>, <code>hop</code>, <code>jiggleParts</code>, blinks. A <code>Clock</code> for live playback.</p></div>
+  <div class="card"><h3>romp/check</h3><p>The motion check: pops, strobes, teleports, spikes and crops, with exemptions for real impacts, deliberate whips, covered frames and fades. Collectors for DOM pages and three.js scenes; <code>romp check</code> for Remotion.</p></div>
+  <div class="card"><h3>romp/audio</h3><p>Synthesised voices and instruments, a mix tuned for phone speakers, and one schedule played live or rendered offline. <code>romp/audio/cartoon</code> adds plops, boings, slurps and gibberish character voices.</p></div>
+  <div class="card"><h3>Adapters and CLI</h3><p><code>romp/remotion</code> (<code>track()</code>), <code>romp/three</code> (<code>motionReport()</code>), and the <code>romp</code> command: <code>romp check</code> and <code>romp sound</code>.</p></div>
+</div>
+
+<section class="prose">
+  <h2>Quick start</h2>
+  <p>romp isn't on npm yet. Install it from GitHub; planck.js is its one required peer.</p>
+<pre><code>bun add github:isaacrowntree/romp planck
+bun add -d esbuild playwright   # for the CLI</code></pre>
+<pre><code>import { Stage, Body, poseAt, impactResponse } from "romp/core";
+
+const stage = new Stage(); // screen space; new Stage({ yDown: false }) for three.js
+stage.ground([{ x: 40, y: 200 }, { x: 40, y: 1830 }, { x: 1040, y: 1830 }, { x: 1040, y: 200 }]);
+stage.add(new Body({ id: "hero", x: 540, y: -100, w: 150, h: 150, spawn: 10, vy: 900 }));
+stage.bake({ frames: 200, fps: 30 });           // once
+
+const hero = stage.get&lt;Body&gt;("hero");
+const pose = poseAt(hero, frame);               // { shown, x, y, angle }
+const look = impactResponse(hero, frame);        // { squashX, squashY, tilt, lift, blink, jiggle }</code></pre>
+  <p>Then the <a href="guides.html">guides</a>: physics, motion, the two ways to play, sound and the motion check. Every export is in the <a href="api.html">API reference</a>.</p>
+
+  <h2>The rules it encodes</h2>
+  <ul>
+    <li><strong>Choreography says where and when; physics says how.</strong> Anything that falls is given a launch velocity, never a path.</li>
+    <li><strong>Bake once, read every frame.</strong> Reading a pose is a pure function of time, so a live viewer, a frame-by-frame renderer and the motion check see identical motion.</li>
+    <li><strong>Impacts drive the picture and the sound.</strong> One recorded impact sizes the squash, the closed eyes, the follow-through and the boing.</li>
+    <li><strong>Nothing pops, strobes or kinks</strong> unless you say it's deliberate, and the check runs in CI.</li>
+    <li><strong>Sound is restrained and belongs to the picture:</strong> one family of voices in the score's key, transients a frame early, energy where a phone speaker can play it.</li>
+  </ul>
+</section>
+
+    </div></main>
+    <footer class="foot"><div class="shell">romp 0.2.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+<script type="module">
+  import { mount } from "./demo.js?v=3bef76db";
+  window.romp = mount(document.getElementById("romp-demo"));
+</script>
+  </body>
 </html>

@@ -40,6 +40,7 @@ export class Stage {
         return b;
     }
     add(actor) {
+        actor.stage = this;
         actor.build(this);
         this.actors.push(actor);
         return actor;
@@ -67,6 +68,20 @@ export class Stage {
         this.baked = true;
         return this;
     }
+    /**
+     * The live-viewer convenience: every actor's interpolated pose at time `t`
+     * (seconds) handed to its `apply(pose, t)`. A pose with a NaN anywhere is
+     * passed as `{ shown: false }` (a NaN position corrupts a renderer's depth
+     * sort, so it's treated as hidden).
+     */
+    pose(t, o = {}) {
+        for (const a of this.actors) {
+            if (!a.apply || !a.frames?.length)
+                continue;
+            const p = rawPoseAt(a, t * this.fps, o);
+            a.apply(hasNaN(p) ? { shown: false } : p, t);
+        }
+    }
     get(id) {
         const a = this.actors.find((x) => x.id === id);
         if (!a)
@@ -74,34 +89,38 @@ export class Stage {
         return a;
     }
 }
-/** An actor's pose at a fractional FRAME (offline renderers: Remotion, seek(t)×fps). */
-export function poseAt(a, frame) {
+function rawPoseAt(a, frame, o = {}) {
     const fr = a.frames;
     if (!fr || fr.length === 0)
         throw new Error("romp: bake() the stage before reading poses");
     const i = Math.max(0, Math.min(fr.length - 1, Math.floor(frame)));
     const j = Math.min(fr.length - 1, i + 1);
     const x = Math.min(1, Math.max(0, frame - i));
-    const p = blend(fr[i], fr[j], x);
+    return blend(fr[i], fr[j], x, o.discrete ?? "nearest");
+}
+/** An actor's pose at a fractional FRAME (offline renderers: Remotion, seek(t)×fps). */
+export function poseAt(a, frame, o = {}) {
+    const p = rawPoseAt(a, frame, o);
     return hasNaN(p) ? { ...p, shown: false } : p;
 }
 /** An actor's pose at a time in SECONDS (realtime viewers), interpolated. */
-export function poseAtTime(a, t, fps = 30) {
-    return poseAt(a, t * fps);
+export function poseAtTime(a, t, fps = 30, o = {}) {
+    return poseAt(a, t * fps, o);
 }
-function blend(a, b, x) {
+function blend(a, b, x, mode) {
+    const pick = () => (mode === "previous" ? (x < 1 ? a : b) : x < 0.5 ? a : b);
     if (typeof a === "number")
         return a + (b - a) * x;
     if (typeof a !== "object" || a === null)
-        return x < 0.5 ? a : b;
+        return pick();
     if (Array.isArray(a))
-        return a.map((v, k) => blend(v, b[k], x));
+        return a.map((v, k) => blend(v, b[k], x, mode));
     const A = a, B = b;
     if (A.shown === false || B.shown === false)
-        return x < 0.5 ? a : b;
+        return pick();
     const out = {};
     for (const k of Object.keys(A))
-        out[k] = blend(A[k], B[k], x);
+        out[k] = blend(A[k], B[k], x, mode);
     return out;
 }
 function hasNaN(v) {
@@ -134,8 +153,8 @@ export class Body {
     body;
     impacts = [];
     frames;
-    stage;
     lastV = 0;
+    stage;
     constructor(o) {
         this.o = o;
         this.id = o.id;
@@ -155,6 +174,7 @@ export class Body {
             angularDamping: o.angularDamping ?? 5,
             fixedRotation: !!o.upright,
             bullet: o.bullet ?? false,
+            gravityScale: o.gravityScale ?? 1,
         });
         const hw = stage.m(o.w / 2), hh = stage.m(o.h / 2);
         let shape;
@@ -233,19 +253,63 @@ export class SpringyBody extends Body {
 }
 /**
  * Something dropped or thrown onto a surface, staying upright (fixed rotation):
- * a real fall and a small damped hop. Rocking about its contact point and the
- * compression on each impact are the caller's to draw, from `impacts`
- * (see `rock()` in core/motion). Optionally lands on its own ledge.
+ * a real fall and a small damped hop. Contact arrests everything: spin, tilt
+ * and depth drift reach their rest exactly at touchdown (`flight()`), and the
+ * rock about the contact point is the caller's to draw (`rock()` in
+ * core/motion, with `flight().rockDir`). Optionally lands on its own ledge.
  */
 export class Drop extends Body {
     constructor(o) {
         super({ shape: "circle", upright: true, restitution: 0.2, bullet: true, ...o });
     }
+    get d() {
+        return this.o;
+    }
     build(stage) {
         super.build(stage);
-        const l = this.o.ledge;
+        const o = this.d;
+        if (o.foot != null) {
+            // Replace the body's shape with the foot: a small circle at the contact point.
+            for (let f = this.body.getFixtureList(); f;) {
+                const next = f.getNext();
+                this.body.destroyFixture(f);
+                f = next;
+            }
+            const sgn = stage.yDown ? 1 : -1;
+            const half = o.shape === "circle" ? o.w / 2 : o.h / 2;
+            this.body.createFixture(Circle(Vec2(0, stage.m(sgn * (half - o.foot))), stage.m(o.foot)), {
+                density: o.density ?? 20,
+                friction: o.friction ?? 1.2,
+                restitution: o.restitution ?? 0.2,
+                filterCategoryBits: o.layer ?? LAYER.A,
+                filterMaskBits: o.mask ?? 0xffff,
+            });
+        }
+        const l = o.ledge;
         if (l)
             stage.world.createBody().createFixture(Edge(stage.v(l.x0, l.y), stage.v(l.x1, l.y)), { friction: 1.2, filterCategoryBits: LAYER.FLOOR });
+    }
+    /** Spin, tilt, depth and rock direction at a (fractional) frame. */
+    flight(frame) {
+        const o = this.d;
+        const start = this.spawnFrame;
+        const land = this.landed;
+        const u = Number.isFinite(land) && land > start ? Math.min(1, Math.max(0, (frame - start) / (land - start))) : frame >= land ? 1 : 0;
+        const last = [...this.impacts].reverse().find((h) => h.frame <= frame);
+        const side = last && Math.abs(last.vx ?? 0) > 3 ? -Math.sign(last.vx) : null;
+        return {
+            u,
+            spin: (o.spinAt ?? 0) * (1 - u),
+            tilt: (o.tilt ?? 0) * (1 - u),
+            z: o.z ? o.z[0] + (o.z[1] - o.z[0]) * u : null,
+            rockDir: side ?? o.rock ?? 1,
+        };
+    }
+    /** The pose placed in its parent's frame (physics pose minus `frame`). */
+    framePose(frame, po = {}) {
+        const p = poseAt(this, frame, po);
+        const off = this.d.frame;
+        return off ? { ...p, x: p.x - off.x, y: p.y - off.y } : p;
     }
 }
 /**
@@ -261,13 +325,14 @@ export class Leap {
     crossings = [];
     stage;
     above = false;
+    /** `gravity` scales the stage's gravity (default 1); `frame` is subtracted from the pose to place it */
     constructor(o) {
         this.o = o;
         this.id = o.id;
     }
     build(stage) {
         this.stage = stage;
-        this.body = stage.world.createDynamicBody({ position: stage.v(this.o.x, this.o.y), active: (this.o.spawn ?? 0) <= 0 });
+        this.body = stage.world.createDynamicBody({ position: stage.v(this.o.x, this.o.y), active: (this.o.spawn ?? 0) <= 0, gravityScale: this.o.gravity ?? 1 });
         this.body.createFixture(Circle(stage.m((this.o.size ?? 60) / 2)), { density: 10, isSensor: true, filterMaskBits: 0 });
         this.body.setLinearVelocity(stage.v(this.o.vx, this.o.vy));
     }
@@ -292,7 +357,8 @@ export class Leap {
         if (!this.body.isActive())
             return { shown: false, x: 0, y: 0, angle: 0, heading: 0, speed: 0 };
         const p = this.body.getPosition(), v = this.body.getLinearVelocity();
-        return { shown: true, x: this.stage.px(p.x), y: this.stage.px(p.y), angle: 0, heading: Math.atan2(v.y, v.x), speed: this.stage.px(Math.hypot(v.x, v.y)) };
+        const off = this.o.frame ?? { x: 0, y: 0 };
+        return { shown: true, x: this.stage.px(p.x) - off.x, y: this.stage.px(p.y) - off.y, angle: 0, heading: Math.atan2(v.y, v.x), speed: this.stage.px(Math.hypot(v.x, v.y)) };
     }
 }
 //# sourceMappingURL=stage.js.map

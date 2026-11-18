@@ -2,15 +2,15 @@
 
 [![ci](https://github.com/isaacrowntree/romp/actions/workflows/ci.yml/badge.svg)](https://github.com/isaacrowntree/romp/actions)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![live demo](https://img.shields.io/badge/demo-live-7B4FD6.svg)](https://isaacrowntree.com/romp/)
+[![docs and live demo](https://img.shields.io/badge/docs-live%20demo-5A3FC0.svg)](https://isaacrowntree.com/romp/)
 
 **Physics-baked character motion, a motion check and synthesised sound for videos made in code.** Works with Remotion, three.js or any page with a `seek(t)`, played live on `requestAnimationFrame` or rendered frame by frame.
 
-### ▶ [Try the live demo: drop a pile of blobs, play it with sound, run the motion check](https://isaacrowntree.com/romp/)
+### ▶ [Docs and live demo](https://isaacrowntree.com/romp/)
 
-[![Seven blob characters dropped into a pile: each one squashes on landing, blinks on impact and its antenna follows through](https://raw.githubusercontent.com/isaacrowntree/romp/master/docs/hero.gif)](https://isaacrowntree.com/romp/)
+[![The romp wordmark drops onto a shelf, a small character is flung into the p, which tips over and springs back upright, then five characters in hats drop into a pile](https://raw.githubusercontent.com/isaacrowntree/romp/master/docs/hero.gif)](https://isaacrowntree.com/romp/)
 
-*Every frame above was read from a simulation baked once at 240 Hz. Each blob's squash, blink and antenna wobble are sized by the real speed of its own impacts, and on the [live demo](https://isaacrowntree.com/romp/) the same impacts fire the boings.*
+*Every frame above was read from one simulation baked at 240 Hz. The letters are springy bodies welded where they land, so the p wobbles back after the knock; each character's squash, blink and hat follow-through (`jiggleParts`) are sized by the real speed of its own impacts. On the [live demo](https://isaacrowntree.com/romp/) you can play it with sound on the audio clock, scrub, render the same soundtrack offline to a WAV, and run the motion check, then plant a bug and watch it fail.*
 
 ## Why
 
@@ -21,7 +21,7 @@ romp encodes the fixes as a small library:
 - **Choreography says where and when; physics says how.** Anything that falls, piles, gets knocked or hops is a rigid body in a planck.js (Box2D) world, not an eased arc.
 - **Bake once, read every frame.** A scene is simulated once at a fixed 240 Hz and one pose per frame is stored. Reading a pose is a pure function of time, so the same motion plays in a live viewer, a frame-by-frame renderer, a scrubber and the motion check, identically.
 - **Impacts drive the picture and the sound.** Every landing is recorded with its speed. Squash, closed eyes, follow-through on hats and antennae, and the boing on the soundtrack all hang off the same impact.
-- **A motion check you can run in CI.** It steps every frame and flags **pops** (appears or vanishes at full size, opaque), **strobes** (more than ~100 px in one frame at 886 px wide), **teleports** (more than ~300 px) and **spikes** (a kink in the motion), with exemptions for real impacts, deliberate whips, covered frames and fades.
+- **A motion check you can run in CI.** It steps every frame and flags **pops** (appears or vanishes at full size, opaque), **strobes** (more than ~100 px in one frame at 886 px wide), **teleports** (more than ~300 px), **spikes** (a kink in the motion) and **crops** (more than a quarter of it outside the frame for more than half a second, other than while entering or leaving), with exemptions for real impacts, deliberate whips, covered frames, fades and objects you allow to crop.
 - **Sound that belongs to the picture.** Synthesised voices (marimba, bell, plucks, Rhodes, upright, kit, whooshes, plops, boings, gibberish character voices), a mix tuned for phone speakers, and one schedule function that plays live or renders offline. No samples, so there's nothing to license.
 
 ## Install
@@ -50,7 +50,7 @@ const pose = poseAt(hero, frame);              // { shown, x, y, angle }, interp
 const look = impactResponse(hero, frame);       // { squashX, squashY, tilt, lift, blink, jiggle }
 ```
 
-`SpringyBody` welds to its ground where it lands (a letter that can be knocked over and wobbles back), `Drop` and `Leap` are a dropped prop and a ballistic leap through a surface. Collision layers (`LAYER`) keep a pile of characters from landing on a wordmark. Without physics, `landing()`, `hop()`, `idle()`, `blinkAt()` and `boing()` give the same squash-and-stretch vocabulary as pure functions of the frame; `ease`, `spring()` and `ringOut()` are closed-form curves.
+`SpringyBody` welds to its ground where it lands (a letter that can be knocked over and wobbles back). `Drop` is a dropped prop: a contact foot, a gravity scale, spin and tilt that unwind to zero at touchdown, depth drift arrested on contact, a rock direction, and its own ledge drawn in its parent's frame (`flight()`, `framePose()`); `Leap` is a ballistic leap through a surface. Your own actors implement `build`, `control`, `sample` and optionally `apply(pose, t)`: `stage.pose(t)` calls every `apply`, and `poseAt(actor, frame, { discrete: "previous" })` holds booleans until the next frame when you need to match an existing renderer. Collision layers (`LAYER`) keep a pile of characters from landing on a wordmark. Without physics, `landing()`, `hop()`, `idle()`, `blinkAt()` and `boing()` give the same squash-and-stretch vocabulary as pure functions of the frame; `ease`, `spring()` and `ringOut()` are closed-form curves.
 
 ### Two ways to play: live, or frame by frame
 
@@ -128,7 +128,7 @@ import { motionReport } from "romp/three";
 const { issues } = motionReport({ seek, scene, camera, fps: 30, W: 886, H: 1920, from: 0, to: 30, whips, covered });
 ```
 
-**Anything else:** build `{ f, row: { name: { x, y, shown, onScreen, area, opacity } } }` per frame and call `analyze(frames, { fps, width })` from `romp/check`.
+**Anything else:** build `{ f, row: { name: { x, y, shown, onScreen, area, opacity, box? } } }` per frame and call `analyze(frames, { fps, width, height })` from `romp/check` (the cropped check needs `box`, `width` and `height`).
 
 ### CLI
 
@@ -143,10 +143,10 @@ romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]
 
 | Import | What |
 |---|---|
-| `romp/core` | `Stage`, `Body`, `SpringyBody`, `Drop`, `Leap`, `LAYER`, `poseAt`, `poseAtTime`, `baked`; `impactResponse`, `landing`, `hop`, `idle`, `blinkAt`, `boing`, `jiggle`, `jiggleParts`, `rock`, `nearImpact`; `ease`, `spring`, `ringOut`, `stagger`; `Clock` |
-| `romp/check` | `analyze`, `formatReport`, `collectDom` |
+| `romp/core` | `Stage` (`add`, `bake`, `pose`, `get`), `Body`, `SpringyBody`, `Drop`, `Leap`, `LAYER`, `poseAt`, `poseAtTime`, `baked`; `impactResponse`, `landing`, `hop`, `idle`, `blinkAt`, `boing`, `jiggle`, `jiggleParts`, `rock`, `nearImpact`; `ease`, `spring`, `ringOut`, `stagger`; `Clock` |
+| `romp/check` | `analyze`, `formatReport`, `collectDom`, `inFrameShare` |
 | `romp/remotion` | `track`, `collectDom`, `analyze` |
-| `romp/three` | `motionReport`, `screenArea`, `opacityOf` |
+| `romp/three` | `motionReport`, `screenBox`, `screenArea`, `opacityOf` |
 | `romp/audio` | `Synth`, `Instruments`, `createMix`, `renderOffline`, `renderWav`, `playLive`, `fitTo`, `wavBase64`, `LEAD` |
 | `romp/audio/cartoon` | `cartoon`, `VOICES` |
 
