@@ -11,6 +11,8 @@ export class Instruments {
         this.s = s;
         this.ctx = s.ctx;
         this.ksCache = new Map();
+        // listen() records what a schedule plays: it asks to wrap these voices too.
+        s.wrapVoices?.(this);
     }
     gain(v) { return this.s.gain(v); }
     pan(p, out) { return this.s.pan(p, out); }

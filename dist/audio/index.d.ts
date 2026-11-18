@@ -3,3 +3,4 @@ export { Synth, midiHz, rng, fitTo } from "./synth.js";
 export { Instruments } from "./instruments.js";
 export { wavBase64 } from "./wav.js";
 export * from "./mix.js";
+export { listen, Score, type ScoreEvent, type ScoreFilter, type ListenOptions } from "./score.js";
