@@ -133,7 +133,7 @@ const { issues } = motionReport({ seek, scene, camera, fps: 30, W: 886, H: 1920,
 ### CLI
 
 ```bash
-romp check <entry.tsx> [--public dir] [--from s] [--to s] [--json]
+romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--json]
 romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]
 ```
 
@@ -143,7 +143,7 @@ romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]
 
 | Import | What |
 |---|---|
-| `romp/core` | `Stage`, `Body`, `SpringyBody`, `Drop`, `Leap`, `LAYER`, `poseAt`, `poseAtTime`, `baked`; `impactResponse`, `landing`, `hop`, `idle`, `blinkAt`, `boing`, `jiggle`, `rock`, `nearImpact`; `ease`, `spring`, `ringOut`, `stagger`; `Clock` |
+| `romp/core` | `Stage`, `Body`, `SpringyBody`, `Drop`, `Leap`, `LAYER`, `poseAt`, `poseAtTime`, `baked`; `impactResponse`, `landing`, `hop`, `idle`, `blinkAt`, `boing`, `jiggle`, `jiggleParts`, `rock`, `nearImpact`; `ease`, `spring`, `ringOut`, `stagger`; `Clock` |
 | `romp/check` | `analyze`, `formatReport`, `collectDom` |
 | `romp/remotion` | `track`, `collectDom`, `analyze` |
 | `romp/three` | `motionReport`, `screenArea`, `opacityOf` |

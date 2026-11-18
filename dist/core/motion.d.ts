@@ -26,6 +26,10 @@ export declare function blinkAt(frame: number, seed?: number): number;
 export declare function idle(frame: number, seed?: number): CharacterPose;
 /** Secondary jiggle for loose parts after a jolt at `dt` frames ago. */
 export declare function jiggle(dt: number, strength?: number): number;
+/** `jiggle` for several parts at once (a hat's pieces, antennae, dangles): each
+ * part lags the one before by `lag` frames, so they follow through in turn
+ * instead of moving as one. */
+export declare function jiggleParts(parts: readonly string[], dt: number, strength?: number, lag?: number): Record<string, number>;
 /** After a landing at frame `land`: squash then wobble back, the hat following through. Before it: stretched in the fall. */
 export declare function landing(frame: number, land: number, seed?: number, strength?: number): CharacterPose;
 /** A continuous hop cycle: `period` frames per hop, `height` px. y is the offset (up is negative in screen space). */

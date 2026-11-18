@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // romp CLI.
-//   romp check <entry.tsx> [--public <dir>] [--from <s>] [--to <s>] [--json]
+//   romp check <entry.tsx> [--public <dir>] [--from <s>] [--to <s>] [--arg <json>] [--json]
 //     Plays a Remotion composition frame by frame in headless Chromium
 //     (@remotion/player), collects every [data-romp] element per frame and runs
 //     the motion check. Exit 1 when it finds issues. The entry default-exports
@@ -37,7 +37,7 @@ const flag = (name, def) => {
   return i >= 0 ? rest[i + 1] ?? true : def;
 };
 if (!cmd || !file || cmd === "--help") {
-  console.log("usage:\n  romp check <entry.tsx> [--public dir] [--from s] [--to s] [--json]\n  romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]");
+  console.log("usage:\n  romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--json]\n  romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]");
   process.exit(cmd ? 0 : 1);
 }
 
@@ -98,7 +98,9 @@ import { createRoot } from "react-dom/client";
 import { Player } from "@remotion/player";
 import { collectDom } from ${JSON.stringify(path.join(dist, "check/dom.js"))};
 import { analyze } from ${JSON.stringify(path.join(dist, "check/analyze.js"))};
-import E from ${JSON.stringify(entry)};
+import E0 from ${JSON.stringify(entry)};
+// The entry is the config, or a function of --arg (one entry for several cuts).
+const E = typeof E0 === "function" ? E0(${JSON.stringify(flag("arg") ? JSON.parse(flag("arg")) : null)}) : E0;
 const ref = createRef();
 const root = document.getElementById("root");
 root.style.width = E.width + "px"; root.style.height = E.height + "px";

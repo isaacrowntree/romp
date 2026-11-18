@@ -3,6 +3,18 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.1.1] — 2026-11-18
+
+### Added
+- `jiggleParts(parts, dt, strength?, lag?)`: secondary motion for several parts
+  at once, each lagging the one before.
+- `romp check --arg <json>`: the entry may export a function of the argument,
+  so one entry covers several cuts (languages, variants).
+
+### Fixed
+- `bin/romp.mjs` is executable, so `bunx romp` / `npx romp` work after
+  installing from GitHub.
+
 ## [0.1.0] — 2026-11-18
 
 ### Added

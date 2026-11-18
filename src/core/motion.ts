@@ -45,6 +45,15 @@ export function jiggle(dt: number, strength = 1): number {
   return 10 * strength * Math.exp(-0.08 * Math.max(0, dt)) * Math.sin(TAU * 0.13 * dt + 1.1);
 }
 
+/** `jiggle` for several parts at once (a hat's pieces, antennae, dangles): each
+ * part lags the one before by `lag` frames, so they follow through in turn
+ * instead of moving as one. */
+export function jiggleParts(parts: readonly string[], dt: number, strength = 1, lag = 1.5): Record<string, number> {
+  const out: Record<string, number> = {};
+  parts.forEach((id, i) => (out[id] = jiggle(dt - i * lag, strength)));
+  return out;
+}
+
 /** After a landing at frame `land`: squash then wobble back, the hat following through. Before it: stretched in the fall. */
 export function landing(frame: number, land: number, seed = 0, strength = 1): CharacterPose {
   const dt = frame - land;
