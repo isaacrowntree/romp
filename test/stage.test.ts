@@ -69,3 +69,15 @@ describe("motion", () => {
     expect(nearImpact(b.impacts, 0)).toBe(false);
   });
 });
+
+describe("sideways impacts", () => {
+  it("records a bounce off a wall as a side impact, and landed ignores it", () => {
+    const s = new Stage({ gravity: 0 });
+    s.ground([{ x: 500, y: -1000 }, { x: 500, y: 1000 }]);
+    s.add(new Body({ id: "ball", shape: "circle", x: 200, y: 0, w: 60, h: 60, vx: 900, restitution: 0.8 }));
+    const b = s.bake({ frames: 60 }).get("ball");
+    const side = b.impacts.filter((h) => h.side);
+    expect(side.length).toBeGreaterThan(0);
+    expect(nearImpact(b.impacts, side[0].frame)).toBe(true);
+  });
+});

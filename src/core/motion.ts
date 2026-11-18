@@ -109,7 +109,7 @@ export function impactResponse(actor: Body, frame: number, seed = 0, speedRef = 
   for (const hit of actor.impacts) {
     const dt = frame - hit.frame;
     if (dt < 0) continue;
-    const k = Math.min(1.4, hit.speed / speedRef);
+    const k = Math.min(1.4, hit.speed / speedRef) * (hit.side ? 0.5 : 1);
     s += SQUASH * k * Math.exp(-0.13 * dt) * Math.cos(TAU * 0.12 * dt);
     tilt += 18 * k * Math.exp(-0.1 * dt) * Math.sin(TAU * 0.09 * dt + 0.6);
     lift += Math.max(0, 4 * k * Math.exp(-0.2 * dt) * Math.sin(TAU * 0.1 * dt));

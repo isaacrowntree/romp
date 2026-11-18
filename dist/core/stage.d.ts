@@ -38,6 +38,8 @@ export interface Impact {
     speed: number;
     /** sideways speed at contact, px/s */
     vx: number;
+    /** a sideways hit (a wall, or another body side-on), not a landing */
+    side?: boolean;
 }
 /**
  * The actor protocol: anything that moves on its own.
@@ -161,6 +163,7 @@ export declare class Body implements Actor<BodyPose> {
     impacts: Impact[];
     frames?: BodyPose[];
     private lastV;
+    private lastVx;
     stage: Stage;
     constructor(o: BodyOptions);
     get spawnFrame(): number;

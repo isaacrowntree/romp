@@ -21,7 +21,7 @@ stage.m(px) · stage.px(metres) · stage.v(x, y)</code></pre>
 <p>A rigid body that records its impacts.</p>
 <pre class="sig"><code>new Body({ id, x, y, w, h, shape?: "rounded" | "box" | "circle", spawn?, vx?, vy?, spin?,
            restitution?, friction?, density?, upright?, angularDamping?, layer?, mask?, bullet?, gravityScale? })
-body.impacts: { frame, t, speed, vx }[]     body.landed: number (first impact frame)</code></pre>
+body.impacts: { frame, t, speed, vx, side? }[]     body.landed: number (first landing frame; side hits don't count)</code></pre>
 <h3 data-export="SpringyBody" id="SpringyBody">SpringyBody</h3>
 <p>Welds itself to <code>ground</code> where it first lands on it, so it can be knocked over and wobble back.</p>
 <pre class="sig"><code>new SpringyBody({ ...BodyOptions, ground: PlanckBody, groundY: number, hz?: 2, damping?: 0.18 })

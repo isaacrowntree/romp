@@ -154,6 +154,7 @@ export class Body {
     impacts = [];
     frames;
     lastV = 0;
+    lastVx = 0;
     stage;
     constructor(o) {
         this.o = o;
@@ -211,7 +212,15 @@ export class Body {
             this.impacts.push(imp);
             this.onImpact(imp);
         }
+        // A sideways hit: the horizontal speed reverses sharply (a wall, or a neighbour side-on).
+        // Without it, a bounce off a wall reads to the motion check as a kink.
+        else if (Math.abs(this.lastVx) > 0.8 && Math.sign(v.x) !== Math.sign(this.lastVx) && Math.abs(this.lastVx - v.x) > 1.2) {
+            const imp = { frame, t, speed: st.px(Math.abs(this.lastVx)), vx: st.px(v.x), side: true };
+            this.impacts.push(imp);
+            this.onImpact(imp);
+        }
         this.lastV = down;
+        this.lastVx = v.x;
     }
     /** hook for subclasses */
     onImpact(_imp) { }
@@ -221,7 +230,7 @@ export class Body {
     }
     /** first time it lands (frames), or Infinity */
     get landed() {
-        return this.impacts[0]?.frame ?? Infinity;
+        return this.impacts.find((h) => !h.side)?.frame ?? Infinity;
     }
 }
 /**

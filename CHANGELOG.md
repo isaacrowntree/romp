@@ -3,6 +3,14 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.3.1] — 2026-11-18
+
+### Fixed
+- Sideways hits are impacts: a body whose horizontal speed reverses sharply (a
+  wall, or a neighbour side-on) records an impact with `side: true`, so the motion
+  check no longer reads a bounce off a wall as a kink. `landed` ignores side hits,
+  and `impactResponse` squashes half as much for them.
+
 ## [0.3.0] — 2026-11-18
 
 ### Added

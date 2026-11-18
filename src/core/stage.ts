@@ -35,6 +35,8 @@ export interface Impact {
   speed: number;
   /** sideways speed at contact, px/s */
   vx: number;
+  /** a sideways hit (a wall, or another body side-on), not a landing */
+  side?: boolean;
 }
 
 /**
@@ -247,6 +249,7 @@ export class Body implements Actor<BodyPose> {
   impacts: Impact[] = [];
   frames?: BodyPose[];
   private lastV = 0;
+  private lastVx = 0;
   stage!: Stage;
   constructor(readonly o: BodyOptions) {
     this.id = o.id;
@@ -299,7 +302,15 @@ export class Body implements Actor<BodyPose> {
       this.impacts.push(imp);
       this.onImpact(imp);
     }
+    // A sideways hit: the horizontal speed reverses sharply (a wall, or a neighbour side-on).
+    // Without it, a bounce off a wall reads to the motion check as a kink.
+    else if (Math.abs(this.lastVx) > 0.8 && Math.sign(v.x) !== Math.sign(this.lastVx) && Math.abs(this.lastVx - v.x) > 1.2) {
+      const imp = { frame, t, speed: st.px(Math.abs(this.lastVx)), vx: st.px(v.x), side: true };
+      this.impacts.push(imp);
+      this.onImpact(imp);
+    }
     this.lastV = down;
+    this.lastVx = v.x;
   }
   /** hook for subclasses */
   protected onImpact(_imp: Impact) {}
@@ -309,7 +320,7 @@ export class Body implements Actor<BodyPose> {
   }
   /** first time it lands (frames), or Infinity */
   get landed() {
-    return this.impacts[0]?.frame ?? Infinity;
+    return this.impacts.find((h) => !h.side)?.frame ?? Infinity;
   }
 }
 

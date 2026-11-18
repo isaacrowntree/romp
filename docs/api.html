@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.3.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.3.1","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check"}
     </script>
   </head>
   <body>
@@ -64,7 +64,7 @@ stage.m(px) · stage.px(metres) · stage.v(x, y)</code></pre>
 <p>A rigid body that records its impacts.</p>
 <pre class="sig"><code>new Body({ id, x, y, w, h, shape?: "rounded" | "box" | "circle", spawn?, vx?, vy?, spin?,
            restitution?, friction?, density?, upright?, angularDamping?, layer?, mask?, bullet?, gravityScale? })
-body.impacts: { frame, t, speed, vx }[]     body.landed: number (first impact frame)</code></pre>
+body.impacts: { frame, t, speed, vx, side? }[]     body.landed: number (first landing frame; side hits don't count)</code></pre>
 <h3 data-export="SpringyBody" id="SpringyBody">SpringyBody</h3>
 <p>Welds itself to <code>ground</code> where it first lands on it, so it can be knocked over and wobble back.</p>
 <pre class="sig"><code>new SpringyBody({ ...BodyOptions, ground: PlanckBody, groundY: number, hz?: 2, damping?: 0.18 })
@@ -158,6 +158,6 @@ romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16]</code></pr
 </div>
 
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.3.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.3.1 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>
