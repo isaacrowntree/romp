@@ -29,7 +29,7 @@ const CAST: Who[] = [
   { id: "eli", color: "#C4B5FD", voice: "sleepy", x: 440, size: 88, at: 124, vx: -20 },
 ];
 // Flung in from above the top-right corner, inside the walls, aimed at the "p".
-const ZIP: Who = { id: "zip", color: "#34D399", voice: "loud", x: 740, size: 70, at: KNOCK_AT - 10, vx: -700 };
+const ZIP: Who = { id: "zip", color: "#34D399", voice: "loud", x: 760, size: 70, at: KNOCK_AT - 10, vx: -600 };
 const HAT = ["brim", "crown", "pom"] as const;
 
 // ── The world, baked once ──────────────────────────────────────────────────
@@ -43,7 +43,7 @@ function bake() {
     // Letters (layer D) touch the shelf and the flung character, not each other.
     s.add(new SpringyBody({ id: `letter:${ch}`, x: LX(i), y: -30, w: LW, h: LH, spawn: 4 + i * 6, vy: 600, ground: shelf, groundY: SHELF, hz: 2.6, layer: LAYER.D, mask: LAYER.B | LAYER.C })),
   );
-  s.add(new Body({ id: ZIP.id, shape: "circle", x: ZIP.x, y: -60, w: ZIP.size, h: ZIP.size, spawn: ZIP.at, vx: ZIP.vx, vy: 260, spin: 4, restitution: 0.45, bullet: true, layer: LAYER.C, mask: LAYER.FLOOR | LAYER.B | LAYER.D | LAYER.A | LAYER.C }));
+  s.add(new Body({ id: ZIP.id, shape: "circle", x: ZIP.x, y: -60, w: ZIP.size, h: ZIP.size, spawn: ZIP.at, vx: ZIP.vx, vy: 200, spin: 4, restitution: 0.45, bullet: true, layer: LAYER.C, mask: LAYER.FLOOR | LAYER.B | LAYER.D | LAYER.A | LAYER.C }));
   // Round bodies, drawn round: what you see is exactly what collides.
   for (const c of CAST) s.add(new Body({ id: c.id, shape: "circle", x: c.x, y: -30, w: c.size, h: c.size, spawn: c.at, vx: c.vx, vy: 800, upright: true, restitution: 0.33, layer: LAYER.A, mask: LAYER.FLOOR | LAYER.A | LAYER.C }));
   return s.bake({ frames: FRAMES + 2, fps: FPS });
