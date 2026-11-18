@@ -35,18 +35,18 @@ describe("lost", () => {
 });
 
 describe("lost, with a camera", () => {
-  it("doesn't flag an object the camera leaves behind (it stays put in its world)", () => {
+  it("doesn't flag an object the camera leaves behind (where it last was is out of view too)", () => {
     // On screen it slides off and stays off, but its world position never changes.
     const fr = Array.from({ length: 90 }, (_, f) => {
       const x0 = f < 30 ? 400 : 400 + (f - 30) * 40;
-      return { f, row: { tree: { x: x0 + 50, y: 250, shown: true, onScreen: x0 + 100 > 0 && x0 < W, area: 1e4, opacity: 1, box: { x0, y0: 200, x1: x0 + 100, y1: 300 }, world: { x: 5, y: 0, z: -2 } } } };
+      return { f, row: { tree: { x: x0 + 50, y: 250, shown: true, onScreen: x0 + 100 > 0 && x0 < W, area: 1e4, opacity: 1, box: { x0, y0: 200, x1: x0 + 100, y1: 300 }, cameraLeft: x0 >= W } } };
     });
     expect(lost(fr)).toHaveLength(0);
   });
   it("still flags one that flies off by itself", () => {
     const fr = Array.from({ length: 90 }, (_, f) => {
       const x0 = f < 30 ? 400 : 400 + (f - 30) * 40;
-      return { f, row: { ball: { x: x0 + 50, y: 250, shown: true, onScreen: x0 + 100 > 0 && x0 < W, area: 1e4, opacity: 1, box: { x0, y0: 200, x1: x0 + 100, y1: 300 }, world: { x: 5 + Math.max(0, f - 30) * 0.4, y: 0, z: -2 } } } };
+      return { f, row: { ball: { x: x0 + 50, y: 250, shown: true, onScreen: x0 + 100 > 0 && x0 < W, area: 1e4, opacity: 1, box: { x0, y0: 200, x1: x0 + 100, y1: 300 }, cameraLeft: false } } };
     });
     expect(lost(fr)).toHaveLength(1);
   });

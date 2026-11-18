@@ -82,6 +82,8 @@ export function motionReport({ seek, scene, camera, fps, W, H, from = 0, to = 3.
     if (o.name) named.push(o);
   });
   const frames: FrameRow[] = [];
+  const lastWorld = new Map<THREE.Object3D, THREE.Vector3>();
+  let prevCam: THREE.Camera | null = null;
   for (let f = Math.round(from * fps); f <= Math.round(to * fps); f++) {
     seek(f / fps);
     scene.updateMatrixWorld(true);
@@ -90,8 +92,23 @@ export function motionReport({ seek, scene, camera, fps, W, H, from = 0, to = 3.
       let shown = true;
       for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) { shown = false; break; }
       o.getWorldPosition(v);
-      const world = { x: v.x, y: v.y, z: v.z };
+      const world = v.clone();
       v.project(camera);
+      // Split its on-screen move since the last frame into the camera's part (the
+      // same world point through last frame's camera vs this one) and its own (its
+      // last and current world points through last frame's camera). Leaving the
+      // frame mostly by the camera's part means the camera moved on and left it
+      // behind (the lost rule spares it).
+      const was = lastWorld.get(o);
+      let cameraLeft = false;
+      if (prevCam && was) {
+        const nowByPrev = world.clone().project(prevCam);
+        const wasByPrev = was.clone().project(prevCam);
+        const cam = Math.hypot(v.x - nowByPrev.x, v.y - nowByPrev.y);
+        const own = Math.hypot(nowByPrev.x - wasByPrev.x, nowByPrev.y - wasByPrev.y);
+        cameraLeft = cam >= own;
+      }
+      lastWorld.set(o, world);
       row[o.name] = {
         x: ((v.x + 1) * W) / 2,
         y: ((1 - v.y) * H) / 2,
@@ -103,10 +120,11 @@ export function motionReport({ seek, scene, camera, fps, W, H, from = 0, to = 3.
         box: shown ? screenBox(o, camera, W, H) ?? undefined : undefined,
         allowCrop: !!o.userData.allowCrop,
         allowExit: !!o.userData.allowExit,
-        world,
+        cameraLeft,
       };
     }
     frames.push({ f, row });
+    prevCam = camera.clone();
   }
   const impacts: Record<string, number[]> = {};
   for (const o of named) if (o.userData.impacts) impacts[o.name] = (o.userData.impacts as number[]).map((t) => Math.round(t * fps));

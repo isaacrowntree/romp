@@ -3,14 +3,24 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.4.2] — 2026-11-19
+
+### Fixed
+- The **lost** rule's camera test, done properly: the three.js collector splits each
+  object's on-screen move into the camera's part (the same world point through last
+  frame's camera and this one) and its own; leaving the frame mostly by the
+  camera's part means the camera moved on (`Sample.cameraLeft`). 0.4.1's test
+  (where it was last in view, through today's camera) missed slow cameras. Tested
+  on three camera-driven films: from 40–56 flags per film to the few real exits.
+
 ## [0.4.1] — 2026-11-19
 
 ### Fixed
 - The motion check's **lost** rule no longer flags objects a moving camera leaves
-  behind. The three.js collector now records each object's world position
-  (`Sample.world`); an object that stayed put in its world while it left the frame
-  was passed by the camera, not lost. Things that fly off by themselves are still
-  flagged. DOM and Remotion pages (no camera) are unchanged.
+  behind, first try: the three.js collector recorded each object's world position,
+  and an object that stayed put in its world while it left the frame was spared.
+  Superseded by 0.4.2 (objects that move a little, like a bobbing pin, slipped
+  through).
 
 ## [0.4.0] — 2026-11-18
 

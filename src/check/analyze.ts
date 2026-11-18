@@ -51,10 +51,10 @@ export interface Sample {
   allowCrop?: boolean;
   /** may leave the frame for good (never flag as lost) */
   allowExit?: boolean;
-  /** its position in its own world (three.js world space), when there's a camera:
-   * an object that didn't move while it left the frame was left behind by the
-   * camera, not lost */
-  world?: { x: number; y: number; z: number };
+  /** with a camera (three.js): its latest on-screen move was mostly the camera's,
+   * not its own: as it leaves the frame, the camera moved on and left it behind,
+   * so it isn't lost */
+  cameraLeft?: boolean;
 }
 
 export interface FrameRow {
@@ -214,7 +214,6 @@ function lost(frames: FrameRow[], names: string[], o: AnalyzeOptions, fps: numbe
     if ((o.allowExit ?? []).includes(name)) continue;
     let seen = false;
     let leftAt: number | null = null;
-    let lastIn: Sample | null = null;
     let leftBehind = false;
     let outFor = 0;
     let flagged = false;
@@ -229,13 +228,12 @@ function lost(frames: FrameRow[], names: string[], o: AnalyzeOptions, fps: numbe
         leftAt = null;
         outFor = 0;
         leftBehind = false;
-        lastIn = p;
         continue;
       }
       if (!seen) continue; // still entering
       if (leftAt == null) {
-        // Left behind by a moving camera (it stayed put in its world): not lost.
-        if (p.world && lastIn?.world && near(p.world, lastIn.world)) { leftBehind = true; }
+        // Left behind by a moving camera: not lost.
+        if (p.cameraLeft) leftBehind = true;
         leftAt = f;
       }
       if (leftBehind) continue;
@@ -248,10 +246,6 @@ function lost(frames: FrameRow[], names: string[], o: AnalyzeOptions, fps: numbe
   }
   return out;
 }
-
-/** Two world positions the same (to a thousandth of their size from the origin). */
-const near = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) =>
-  Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) <= 1e-3 * Math.max(1, Math.hypot(b.x, b.y, b.z));
 
 /** Format a report for a terminal. */
 export function formatReport(r: Report, fps = 30): string {

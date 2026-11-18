@@ -152,7 +152,6 @@ function lost(frames, names, o, fps, hidden) {
             continue;
         let seen = false;
         let leftAt = null;
-        let lastIn = null;
         let leftBehind = false;
         let outFor = 0;
         let flagged = false;
@@ -175,16 +174,14 @@ function lost(frames, names, o, fps, hidden) {
                 leftAt = null;
                 outFor = 0;
                 leftBehind = false;
-                lastIn = p;
                 continue;
             }
             if (!seen)
                 continue; // still entering
             if (leftAt == null) {
-                // Left behind by a moving camera (it stayed put in its world): not lost.
-                if (p.world && lastIn?.world && near(p.world, lastIn.world)) {
+                // Left behind by a moving camera: not lost.
+                if (p.cameraLeft)
                     leftBehind = true;
-                }
                 leftAt = f;
             }
             if (leftBehind)
@@ -198,8 +195,6 @@ function lost(frames, names, o, fps, hidden) {
     }
     return out;
 }
-/** Two world positions the same (to a thousandth of their size from the origin). */
-const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) <= 1e-3 * Math.max(1, Math.hypot(b.x, b.y, b.z));
 /** Format a report for a terminal. */
 export function formatReport(r, fps = 30) {
     if (!r.issues.length)
