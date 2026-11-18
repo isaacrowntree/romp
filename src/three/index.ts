@@ -89,7 +89,9 @@ export function motionReport({ seek, scene, camera, fps, W, H, from = 0, to = 3.
     for (const o of named) {
       let shown = true;
       for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) { shown = false; break; }
-      o.getWorldPosition(v).project(camera);
+      o.getWorldPosition(v);
+      const world = { x: v.x, y: v.y, z: v.z };
+      v.project(camera);
       row[o.name] = {
         x: ((v.x + 1) * W) / 2,
         y: ((1 - v.y) * H) / 2,
@@ -101,6 +103,7 @@ export function motionReport({ seek, scene, camera, fps, W, H, from = 0, to = 3.
         box: shown ? screenBox(o, camera, W, H) ?? undefined : undefined,
         allowCrop: !!o.userData.allowCrop,
         allowExit: !!o.userData.allowExit,
+        world,
       };
     }
     frames.push({ f, row });

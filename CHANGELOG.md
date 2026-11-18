@@ -3,6 +3,15 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.4.1] — 2026-11-19
+
+### Fixed
+- The motion check's **lost** rule no longer flags objects a moving camera leaves
+  behind. The three.js collector now records each object's world position
+  (`Sample.world`); an object that stayed put in its world while it left the frame
+  was passed by the camera, not lost. Things that fly off by themselves are still
+  flagged. DOM and Remotion pages (no camera) are unchanged.
+
 ## [0.4.0] — 2026-11-18
 
 ### Added

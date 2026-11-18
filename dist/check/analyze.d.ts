@@ -55,6 +55,14 @@ export interface Sample {
     allowCrop?: boolean;
     /** may leave the frame for good (never flag as lost) */
     allowExit?: boolean;
+    /** its position in its own world (three.js world space), when there's a camera:
+     * an object that didn't move while it left the frame was left behind by the
+     * camera, not lost */
+    world?: {
+        x: number;
+        y: number;
+        z: number;
+    };
 }
 export interface FrameRow {
     f: number;
