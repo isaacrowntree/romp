@@ -8,6 +8,7 @@
  */
 export { collectDom } from "../check/dom.js";
 export { analyze, formatReport, type Report, type Issue, type Sample, type FrameRow } from "../check/analyze.js";
+import { particleSample, type Particle } from "../particles/index.js";
 
 /** Data attributes for the motion check: spread them on the element to track. */
 export function track(name: string, o: { impact?: boolean; seamless?: boolean; allowCrop?: boolean; allowExit?: boolean } = {}): Record<string, string | undefined> {
@@ -17,6 +18,37 @@ export function track(name: string, o: { impact?: boolean; seamless?: boolean; a
     "data-romp-seamless": o.seamless ? "1" : undefined,
     "data-romp-allow-crop": o.allowCrop ? "1" : undefined,
     "data-romp-allow-exit": o.allowExit ? "1" : undefined,
+  };
+}
+
+/**
+ * Track a particle burst as ONE object: props for an empty element centred on
+ * where the burst comes from, covering all of it, at its strongest opacity. Render it next to the
+ * particles (untracked themselves: single sparks outrun the strobe limit by
+ * design) and the motion check sees the burst grow in, travel and fade out.
+ *
+ *   const sparks = emitter.particlesAt(frame);
+ *   <div {...trackBurst("sparks", sparks)} />
+ *   {sparks.map((p) => <i key={p.i} style={particleStyle(p)} />)}
+ */
+export function trackBurst(name: string, particles: readonly Particle[], o: { impact?: boolean; allowCrop?: boolean; allowExit?: boolean } = {}): Record<string, unknown> {
+  const s = particleSample(particles);
+  const b = s.box;
+  // Centred on where the burst comes from (the DOM collector reads an element's
+  // centre), and wide enough to cover every particle.
+  const rx = b ? Math.max(s.x - b.x0, b.x1 - s.x) : 0, ry = b ? Math.max(s.y - b.y0, b.y1 - s.y) : 0;
+  return {
+    ...track(name, o),
+    style: {
+      position: "absolute",
+      left: s.x - rx,
+      top: s.y - ry,
+      width: 2 * rx,
+      height: 2 * ry,
+      opacity: s.opacity,
+      display: s.shown ? "block" : "none",
+      pointerEvents: "none",
+    },
   };
 }
 
