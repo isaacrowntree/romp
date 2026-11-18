@@ -5,12 +5,15 @@
 //     (@remotion/player), collects every [data-romp] element per frame and runs
 //     the motion check. Exit 1 when it finds issues. The entry default-exports
 //     { component, props?, durationInFrames, fps, width, height, whips?, covered? }.
+//   romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]
+//     Plays a Lottie (After Effects) export with lottie-web in headless Chromium,
+//     every frame, and runs the motion check over its layers (romp/lottie).
 //   romp sound <module.ts> --out <file.wav> [--arg <json>] [--lufs -16]
 //     The module exports `render(arg)` returning an AudioBuffer or a base64 WAV
 //     (romp/audio's renderOffline / renderWav). Rendered in headless Chromium,
 //     loudness-normalised with ffmpeg when it's on PATH.
 // Needs esbuild and playwright (and react, react-dom, remotion, @remotion/player
-// for `check`) installed in your project.
+// for `check`, or lottie-web for `check --lottie`) installed in your project.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
@@ -31,18 +34,32 @@ const need = (m) => {
   }
 };
 
-const [cmd, file, ...rest] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+// `romp check --lottie anim.json`: the file follows the flag (a .json entry means the same).
+const lottieAt = argv.indexOf("--lottie");
+const lottieFile = lottieAt >= 0 ? argv.splice(lottieAt, 2)[1] : argv[0] === "check" && /\.json$/i.test(argv[1] ?? "") ? argv.splice(1, 1)[0] : null;
+const cmd = argv[0];
+const file = lottieFile ?? argv[1];
+const rest = argv.slice(lottieFile ? 1 : 2);
 const flag = (name, def) => {
   const i = rest.indexOf(`--${name}`);
   return i >= 0 ? rest[i + 1] ?? true : def;
 };
 if (!cmd || !file || cmd === "--help") {
-  console.log("usage:\n  romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--json]\n  romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]");
+  console.log("usage:\n  romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--json]\n  romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]\n  romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]");
   process.exit(cmd ? 0 : 1);
 }
 
 const { build } = need("esbuild");
 const { chromium } = need("playwright");
+if (lottieFile) {
+  try {
+    req.resolve("lottie-web");
+  } catch {
+    console.error('romp: this needs "lottie-web" installed in your project (npm i -D lottie-web)');
+    process.exit(2);
+  }
+}
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "romp-"));
 
 async function bundle(entrySource, name) {
@@ -92,7 +109,21 @@ function serve(js, publicDir) {
 
 if (cmd === "check") {
   const entry = path.resolve(file);
-  const js = await bundle(
+  const js = lottieFile ? await bundle(
+    `import lottie from "lottie-web";
+import { lottieReport } from ${JSON.stringify(path.join(dist, "lottie/index.js"))};
+import data from ${JSON.stringify(entry)};
+const root = document.getElementById("root");
+root.style.width = data.w + "px"; root.style.height = data.h + "px"; root.style.overflow = "hidden";
+const anim = lottie.loadAnimation({ container: root, renderer: "svg", loop: false, autoplay: false, animationData: data });
+const layers = ${JSON.stringify(typeof flag("layers") === "string" ? flag("layers").split(",").map((s) => s.trim()) : null)};
+window.__rompMeta = { fps: data.fr, durationInFrames: Math.round(data.op - data.ip), width: data.w, height: data.h };
+window.__rompRun = async (from, to) => {
+  if (!anim.isLoaded) await new Promise((r) => anim.addEventListener("DOMLoaded", r));
+  return lottieReport(anim, { from, to, layers: layers ?? undefined });
+};`,
+    "lottie",
+  ) : await bundle(
     `import { createElement, createRef } from "react";
 import { createRoot } from "react-dom/client";
 import { Player } from "@remotion/player";

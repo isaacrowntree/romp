@@ -1,6 +1,6 @@
 {
   "name": "romp",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Physics-baked character motion, a motion check and synthesised sound for videos made in code \u2014 Remotion, three.js or any seek(t) page, played live or rendered frame by frame.",
   "type": "module",
   "main": "./dist/index.js",
@@ -37,6 +37,22 @@
     "./audio/cartoon": {
       "types": "./dist/audio/cartoon.d.ts",
       "import": "./dist/audio/cartoon.js"
+    },
+    "./particles": {
+      "types": "./dist/particles/index.d.ts",
+      "import": "./dist/particles/index.js"
+    },
+    "./theatre": {
+      "types": "./dist/theatre/index.d.ts",
+      "import": "./dist/theatre/index.js"
+    },
+    "./motion-canvas": {
+      "types": "./dist/motion-canvas/index.d.ts",
+      "import": "./dist/motion-canvas/index.js"
+    },
+    "./lottie": {
+      "types": "./dist/lottie/index.d.ts",
+      "import": "./dist/lottie/index.js"
     }
   },
   "files": [
@@ -75,7 +91,13 @@
     "mascot",
     "character-animation",
     "deterministic",
-    "motion-check"
+    "motion-check",
+    "particles",
+    "confetti",
+    "lottie",
+    "theatre.js",
+    "motion-canvas",
+    "audio-reactive"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/build-docs.mjs",
@@ -93,7 +115,11 @@
     "@remotion/player": ">=4",
     "three": ">=0.150.0",
     "playwright": ">=1.40.0",
-    "esbuild": ">=0.20.0"
+    "esbuild": ">=0.20.0",
+    "@theatre/core": ">=0.6.0",
+    "@motion-canvas/core": ">=3.0.0",
+    "@motion-canvas/2d": ">=3.0.0",
+    "lottie-web": ">=5.7.0"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -113,15 +139,30 @@
     },
     "esbuild": {
       "optional": true
+    },
+    "@theatre/core": {
+      "optional": true
+    },
+    "@motion-canvas/core": {
+      "optional": true
+    },
+    "@motion-canvas/2d": {
+      "optional": true
+    },
+    "lottie-web": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@remotion/player": "4.0.544",
+    "@theatre/core": "0.7.2",
     "@types/react": "19.3.0",
     "@types/three": "0.186.0",
     "esbuild": "0.28.1",
     "eslint": "^10.12.0",
+    "happy-dom": "21.0.4",
+    "lottie-web": "5.13.0",
     "planck": "1.5.0",
     "playwright": "1.64.1",
     "react": "19.3.1",
