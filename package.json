@@ -1,0 +1,136 @@
+{
+  "name": "romp",
+  "version": "0.1.0",
+  "description": "Physics-baked character motion, a motion check and synthesised sound for videos made in code \u2014 Remotion, three.js or any seek(t) page, played live or rendered frame by frame.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "bin": {
+    "romp": "./bin/romp.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./check": {
+      "types": "./dist/check/index.d.ts",
+      "import": "./dist/check/index.js"
+    },
+    "./remotion": {
+      "types": "./dist/remotion/index.d.ts",
+      "import": "./dist/remotion/index.js"
+    },
+    "./three": {
+      "types": "./dist/three/index.d.ts",
+      "import": "./dist/three/index.js"
+    },
+    "./audio": {
+      "types": "./dist/audio/index.d.ts",
+      "import": "./dist/audio/index.js"
+    },
+    "./audio/cartoon": {
+      "types": "./dist/audio/cartoon.d.ts",
+      "import": "./dist/audio/cartoon.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "SECURITY.md"
+  ],
+  "license": "MIT",
+  "author": "Isaac Rowntree",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isaacrowntree/romp.git"
+  },
+  "bugs": "https://github.com/isaacrowntree/romp/issues",
+  "homepage": "https://isaacrowntree.com/romp/",
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "animation",
+    "motion",
+    "physics",
+    "box2d",
+    "planck",
+    "remotion",
+    "three.js",
+    "video",
+    "motion-graphics",
+    "squash-and-stretch",
+    "web-audio",
+    "synthesis",
+    "sound-design",
+    "mascot",
+    "character-animation",
+    "deterministic",
+    "motion-check"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/build-docs.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "gif": "bun run build && node scripts/gen-hero-gif.mjs",
+    "prepublishOnly": "bun run lint && bun run build && bun run test"
+  },
+  "peerDependencies": {
+    "planck": ">=1.4.0",
+    "react": ">=18",
+    "remotion": ">=4",
+    "@remotion/player": ">=4",
+    "three": ">=0.150.0",
+    "playwright": ">=1.40.0",
+    "esbuild": ">=0.20.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "remotion": {
+      "optional": true
+    },
+    "@remotion/player": {
+      "optional": true
+    },
+    "three": {
+      "optional": true
+    },
+    "playwright": {
+      "optional": true
+    },
+    "esbuild": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@remotion/player": "4.0.544",
+    "@types/react": "19.3.0",
+    "@types/three": "0.186.0",
+    "esbuild": "0.28.1",
+    "eslint": "^10.12.0",
+    "planck": "1.5.0",
+    "playwright": "1.64.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.544",
+    "three": "0.186.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.5"
+  },
+  "private": true
+}

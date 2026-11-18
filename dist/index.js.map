@@ -1,0 +1,1 @@
+{"version":3,"file":"index.js","sourceRoot":"","sources":["../src/index.ts"],"names":[],"mappings":"AAAA,0GAA0G;AAC1G,cAAc,iBAAiB,CAAC;AAChC,cAAc,kBAAkB,CAAC","sourcesContent":["/** romp: physics-baked character motion, a motion check and synthesised sound for videos made in code. */\nexport * from \"./core/index.js\";\nexport * from \"./check/index.js\";\n"]}

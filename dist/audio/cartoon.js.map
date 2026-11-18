@@ -1,0 +1,1 @@
+{"version":3,"file":"cartoon.js","sourceRoot":"","sources":["../../src/audio/cartoon.ts"],"names":[],"mappings":"AAAA,iHAAiH;AACjH,OAAO,EAAE,OAAO,EAAE,MAAM,EAAE,MAAM,aAAa,CAAC","sourcesContent":["/** romp/audio/cartoon: plop, boing, babble (gibberish voices), slurp, beep, ding, tock, pip, swish, scribble. */\nexport { cartoon, VOICES } from \"./voices.js\";\n"]}
