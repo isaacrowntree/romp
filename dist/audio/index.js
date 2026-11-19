@@ -4,4 +4,6 @@ export { Instruments } from "./instruments.js";
 export { wavBase64 } from "./wav.js";
 export * from "./mix.js";
 export { listen, Score } from "./score.js";
+export { crossfadeBed } from "./bed.js";
+export { readWav, dropouts, rmsWindows, formatDropouts } from "./gaps.js";
 //# sourceMappingURL=index.js.map

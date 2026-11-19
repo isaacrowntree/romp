@@ -1,7 +1,7 @@
 export function collectDom(root = document.body) {
     const frame = root.getBoundingClientRect();
     const out = {};
-    root.querySelectorAll("[data-romp]").forEach((el) => {
+    root.querySelectorAll("[data-romp]").forEach((el, order) => {
         const name = el.dataset.romp;
         const r = el.getBoundingClientRect();
         let opacity = 1;
@@ -28,6 +28,23 @@ export function collectDom(root = document.body) {
             allowCrop: el.dataset.rompAllowCrop === "1",
             allowExit: el.dataset.rompAllowExit === "1",
         };
+        const d = el.dataset;
+        const role = d.rompRole;
+        if (role === "text" || role === "focus" || role === "prop")
+            sample.role = role;
+        sample.z = d.rompZ != null ? +d.rompZ : order;
+        if (d.rompAllow)
+            sample.allow = d.rompAllow.split(",").map((k) => k.trim());
+        if (role === "text") {
+            const text = d.rompText ?? el.textContent ?? "";
+            const total = d.rompCharsTotal != null ? +d.rompCharsTotal : [...text].length;
+            sample.text = text;
+            sample.chars = { shown: d.rompCharsShown != null ? +d.rompCharsShown : total, total };
+            if (d.rompWords != null)
+                sample.words = +d.rompWords;
+            if (d.rompHeading === "1")
+                sample.heading = true;
+        }
         // Several elements with one name: keep the biggest (a character drawn twice for a keyline, say).
         if (!out[name] || sample.area > out[name].area)
             out[name] = sample;

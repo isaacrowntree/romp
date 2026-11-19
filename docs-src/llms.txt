@@ -18,9 +18,16 @@ Install from GitHub (not on npm yet): `bun add github:isaacrowntree/romp planck`
 ## romp/check
 - `analyze(frames, { fps?, width?, height?, whips?, covered?, impacts?, seamless?, croppedFraction?, croppedSeconds?, allowCrop?, lostSeconds?, allowExit? })` → `{ tracked, frames, issues }`. Issues: pop (appears/vanishes in frame at ≥30% of its largest size, opaque), strobe (> ~100 px per frame at 886 px wide), teleport (> ~300 px), spike (acceleration far above its neighbours'), cropped (more than 25% of its box outside the frame for more than 0.5 s, not while entering or leaving; needs width and height). Exempt: impacts, whips, covered frames, fades/grows, seamless, allowCrop.
 - `formatReport(report, fps?)`, `collectDom(root)` (every `[data-romp]` element, with its box), `inFrameShare(box, W, H)`.
+- Text rules, for samples with `role: "text" | "focus" | "prop"` (text: `text?`, `words?`, `chars?: { shown, total }`, `heading?`; any: `z?`, `allow?`): offsafe (a legible text outside the safe area for > 0.1 s; `safeArea(W, H)`: 5% of the long side at its ends, 3.5% of the short side), covers (a text over the focus box > 0.1 s), overlap (two texts, or a prop drawn over a text, > 0.2 s; a prop with lower `z` is a backdrop), unfinished (gone, or its scene cut, before every character shows), unread (whole for less than `readingTime`), empty (a box with no words > 0.2 s, or a heading still typing 0.5 s after it appears), stale (strict or `stale: true`: nothing changes > 3 s after the words were read). Options: `scenes` (cuts, seconds), `strict`, `safe`, `offsafeSeconds`, `coversFraction`, `coversSeconds`, `overlapFraction`, `overlapSeconds`, `emptySeconds`, `headingSeconds`, `reading: { wpm, min }`, `stale`, `allow: { kind: names (trailing * = prefix) }`. Off for objects without a role.
+
+## romp/timing
+- `readingTime(text | words, { wpm = 180, min = 1.5 })` seconds; `wordCount(text)`.
+- `captionTiming(text, { cps = 30, hold?, enter?, exit?, fps? })` → `{ chars, words, enterFrames, typeFrames, holdFrames, exitFrames, totalFrames, typed(frame) }`.
+- `timeline(scenes, { fps, transition = 0.5, actSeconds = 1.2, gap, lead, tail, cps })`: scenes `{ name, captions?, seconds?, act?, transition? }` → `{ frames, scenes (start, frames incl. transitions, transitionIn/Out, captions { text, from, to, at, timing }), check: { covered, scenes } }`; transitions never land on a caption's reading window. `captionAt(caption, frame)` → `{ on, typed, text }`.
 
 ## romp/remotion
-- `track(name, { impact?, seamless?, allowCrop? })` → data attributes for `romp check`.
+- `track(name, { impact?, seamless?, allowCrop?, allowExit?, role?, allow?, z? })` → data attributes for `romp check`.
+- `trackText(name, text, { typed?, heading?, ... })` → a text for the text rules (`data-romp-role`, `-text`, `-chars-shown`, `-chars-total`, `-heading`). `sceneSequence(scene)` → `{ from, durationInFrames, name }`. Re-exports `captionTiming`, `captionAt`, `timeline`, `readingTime`.
 - `trackBurst(name, particles, opts?)` → props for an empty element covering a particle burst (centred where it comes from): the check follows the burst as one object.
 
 ## romp/three
@@ -31,6 +38,7 @@ Install from GitHub (not on npm yet): `bun add github:isaacrowntree/romp planck`
 - A `Schedule` is `(synth, buses, at) => void`; `at(filmSeconds)` → context time or null (already played).
 - `renderOffline(schedule, { duration, extend? })` → AudioBuffer; `renderWav(...)` → base64 WAV; `playLive(ctx, schedule, { from?, extend? })` → `{ origin, stop() }`. `fitTo`, `midiHz`, `rng`, `wavBase64`, `LEAD` (1/30 s).
 - `listen(schedule, { extend? })` → `Score`: runs a synchronous schedule silently and records every voice it plays (outermost call only) as `{ t, end, voice, bus, vel, midi?, shape: hit|swell|bed }`. `score.envelopeAt(t, { bus?, voice?, decay? })` (sum of levels through each event's shape), `score.beatAt(t, filter = { bus: "drums" })` → `{ index, phase, since, t0, t1 }`, `score.onsetsBetween(t0, t1, filter?)`, `score.select(filter)`. Pure functions of film time: audio-reactive visuals without a live analyser.
+- `dropouts(audio, { min = 0.1, max = 1, drop = 30 dB, floor?, window?, around? })` → `{ t, duration, level, bed }[]`: near-silence inside a continuous bed; `readWav(bytes)`, `rmsWindows`, `formatDropouts`. `crossfadeBed(synth, out, sections { from, to, write(out, t0, t1) }, { fade = 0.5 })`: one bed with equal-power crossfades at every join, no gaps.
 - `romp/audio/cartoon`: `cartoon` (extend with plop, boing, babble, slurp, beep, ding, tock, pip, swish, scribble) and `VOICES`.
 
 ## romp/particles
@@ -50,6 +58,7 @@ Install from GitHub (not on npm yet): `bun add github:isaacrowntree/romp planck`
 - `lottieReport(anim, { layers?, from?, to?, ...AnalyzeOptions })` (fps/size from the animation), `lottieFrames`, `collectLottie`. Steps `goToAndStop(f, true)`; layers by AE name, precomp layers "Precomp/Layer"; transforms through parents and precomps; null and matte layers skipped. A layer cut in at full size is a pop.
 
 ## CLI
-- `romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--json]`: plays a Remotion composition in headless Chromium, every frame; exit 1 on issues. The entry default-exports `{ component, props?, durationInFrames, fps, width, height, whips?, covered? }` or a function of `--arg` returning one.
+- `romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--strict] [--audio file.wav] [--json]`: plays a Remotion composition in headless Chromium, every frame; exit 1 on any issue (motion, text, audio). The entry default-exports `{ component, props?, durationInFrames, fps, width, height, ...analyze options }` or a function of `--arg` returning one. `--strict`: untagged objects are props for overlap, and stale runs.
+- `romp check --audio <file.wav> [--json]`: the dropout check alone.
 - `romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]`: plays a Lottie export with lottie-web (installed in your project) in headless Chromium and checks every layer.
 - `romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]`: renders a module's `render(arg)` in headless Chromium and loudness-normalises it.

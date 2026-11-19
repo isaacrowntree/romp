@@ -26,10 +26,16 @@
  * swap for an identical twin) aren't pops; `allowCrop` objects (a deliberate
  * close-up, a background running off the edge) aren't cropped.
  *
+ * Text rules (text.ts) run over samples that carry a `role`: words a viewer has
+ * to read (`text`), the thing being talked about (`focus`) and everything else
+ * that moves (`prop`): offsafe, covers, overlap, unfinished, unread, empty and
+ * (opt-in) stale.
+ *
  * It only reads positions, so it works for anything you can seek: a realtime
  * page's seek(t), a frame renderer, three.js or the DOM (see collectDom and
  * romp/three).
  */
+import { textIssues } from "./text.js";
 export function analyze(frames, o = {}) {
     const fps = o.fps ?? 30;
     const scale = (o.width ?? 886) / 886;
@@ -84,6 +90,7 @@ export function analyze(frames, o = {}) {
     }
     if (o.width && o.height)
         issues.push(...cropped(frames, names, o, fps, hidden), ...lost(frames, names, o, fps, hidden));
+    issues.push(...textIssues(frames, names, o, fps, hidden));
     issues.sort((a, b) => a.frame - b.frame);
     return { tracked: names, frames: frames.length, issues };
 }
@@ -199,7 +206,7 @@ function lost(frames, names, o, fps, hidden) {
 export function formatReport(r, fps = 30) {
     if (!r.issues.length)
         return `motion check: ${r.tracked.length} objects over ${r.frames} frames, no issues`;
-    const lines = r.issues.map((i) => `  ${String(i.frame).padStart(5)}  ${(i.frame / fps).toFixed(2).padStart(6)}s  ${i.kind.padEnd(8)} ${i.name}: ${i.detail}`);
+    const lines = r.issues.map((i) => `  ${String(i.frame).padStart(5)}  ${(i.frame / fps).toFixed(2).padStart(6)}s  ${i.kind.padEnd(10)} ${i.name}: ${i.detail}`);
     return `motion check: ${r.issues.length} issue(s) in ${r.tracked.length} objects over ${r.frames} frames\n${lines.join("\n")}`;
 }
 //# sourceMappingURL=analyze.js.map

@@ -3,6 +3,56 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.5.0] — 2026-11-20
+
+Words on screen and the soundtrack get checked too. A frame-by-frame review of a
+real portrait film turned up faults the motion check couldn't see: captions cut
+off mid-word when their scene ended, lines whole for barely a second, a speech
+bubble covering the very button it described, bubbles running off the edge,
+papers and dots crossing a title, empty bubbles, titles that sat blank under
+their underline while they retyped after every cut, and the music dropping out
+for half a second at segment joins. Each of those is now a rule, and the timing
+helpers make the right lengths the default.
+
+### Added
+- **Text rules** in the motion check, for objects tracked with a `role`
+  (`"text"`, `"focus"` or `"prop"`): `offsafe` (a legible text outside the safe
+  area; `safeArea()` defaults to 5% of the long side at its ends and 3.5% of the
+  short side, so 38/96 px at 1080×1920), `covers` (a text over the focus box),
+  `overlap` (two texts, or a prop drawn over a text; a prop drawn under it is a
+  backdrop), `unfinished` (gone, or its scene cut, before every character
+  shows), `unread` (whole for less than its reading time), `empty` (a box with
+  no words, or a heading still typing after it appears) and `stale` (opt-in:
+  nothing moves long after the words were read). Each has its thresholds as
+  options and an `allow` list (names, or a `prefix*`). New `Sample` fields:
+  `role`, `chars: { shown, total }`, `text`, `words`, `heading`, `z`, `allow`;
+  new options `scenes` (cuts), `strict`, `safe`, `reading` and the thresholds.
+- **romp/timing**: `readingTime(text, { wpm = 180, min = 1.5 })`, `wordCount`,
+  `captionTiming(text, { cps = 30 })` (`typeFrames`, `holdFrames`,
+  `totalFrames`, `typed(frame)`), `timeline(scenes)` (scene lengths from their
+  captions, transitions that never land on a caption's reading window, 1.2 s act
+  cards, and a `check` with the `covered` spans and cuts to spread into a check
+  entry) and `captionAt`. Also exported from `romp` and `romp/remotion`.
+- **romp/remotion**: `trackText(name, text, { typed, heading })`,
+  `track(name, { role, allow, z })` and `sceneSequence(scene)`. A `CheckEntry`
+  takes any `analyze()` option.
+- `collectDom` reads `data-romp-role`, `data-romp-text`, `data-romp-chars-shown`,
+  `data-romp-chars-total`, `data-romp-words`, `data-romp-heading`,
+  `data-romp-allow` and `data-romp-z`, and records each element's paint order.
+- **Audio check**: `dropouts(buffer)` in romp/audio flags 0.1–1 s of near
+  silence (30 dB under the bed) with sound on both sides; `readWav`,
+  `rmsWindows`, `formatDropouts`. `romp check --audio file.wav` runs it, alone
+  or with an entry. `crossfadeBed(synth, bus, sections, { fade })` writes one
+  continuous bed with equal-power crossfades at every join.
+- `romp check --strict`: untagged tracked objects count as props for `overlap`,
+  and `stale` runs. `formatReport` widens its kind column for the new kinds.
+- Demo: a caption typed in with `captionTiming` and tracked as text, and a
+  "Plant a text bug" toggle that cuts it off mid-word.
+
+### Changed
+- The text rules are on by default for anything with a role. A film that tags
+  nothing reports exactly what it did before.
+
 ## [0.4.2] — 2026-11-19
 
 ### Fixed

@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 // romp CLI.
-//   romp check <entry.tsx> [--public <dir>] [--from <s>] [--to <s>] [--arg <json>] [--json]
+//   romp check <entry.tsx> [--public <dir>] [--from <s>] [--to <s>] [--arg <json>] [--strict] [--audio <file.wav>] [--json]
 //     Plays a Remotion composition frame by frame in headless Chromium
 //     (@remotion/player), collects every [data-romp] element per frame and runs
-//     the motion check. Exit 1 when it finds issues. The entry default-exports
-//     { component, props?, durationInFrames, fps, width, height, whips?, covered? }.
+//     the motion check, with the text rules for elements tracked with a role.
+//     --strict also counts untagged elements as props (overlap) and runs the
+//     stale rule. Exit 1 when it finds issues. The entry default-exports
+//     { component, props?, durationInFrames, fps, width, height, whips?, covered?,
+//       …any analyze() option }.
+//   romp check --audio <file.wav>
+//     The audio check alone: dropouts (0.1–1 s of near-silence inside the bed).
+//     With an entry as well, both run and either fails the command.
 //   romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]
 //     Plays a Lottie (After Effects) export with lottie-web in headless Chromium,
 //     every frame, and runs the motion check over its layers (romp/lottie).
@@ -35,6 +41,11 @@ const need = (m) => {
 };
 
 const argv = process.argv.slice(2);
+// `--audio file.wav` and `--strict` can sit anywhere; take them out first.
+const audioAt = argv.indexOf("--audio");
+const audioFile = audioAt >= 0 ? argv.splice(audioAt, 2)[1] : null;
+const strictAt = argv.indexOf("--strict");
+const strict = strictAt >= 0 && !!argv.splice(strictAt, 1);
 // `romp check --lottie anim.json`: the file follows the flag (a .json entry means the same).
 const lottieAt = argv.indexOf("--lottie");
 const lottieFile = lottieAt >= 0 ? argv.splice(lottieAt, 2)[1] : argv[0] === "check" && /\.json$/i.test(argv[1] ?? "") ? argv.splice(1, 1)[0] : null;
@@ -43,11 +54,28 @@ const file = lottieFile ?? argv[1];
 const rest = argv.slice(lottieFile ? 1 : 2);
 const flag = (name, def) => {
   const i = rest.indexOf(`--${name}`);
-  return i >= 0 ? rest[i + 1] ?? true : def;
+  if (i < 0) return def;
+  const v = rest[i + 1];
+  return v == null || v.startsWith("--") ? true : v;
 };
-if (!cmd || !file || cmd === "--help") {
-  console.log("usage:\n  romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--json]\n  romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]\n  romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]");
+const audioOnly = cmd === "check" && audioFile && (!file || file.startsWith("--"));
+if (!cmd || (!file && !audioOnly) || cmd === "--help") {
+  console.log("usage:\n  romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--strict] [--audio file.wav] [--json]\n  romp check --audio <file.wav> [--json]\n  romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]\n  romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]");
   process.exit(cmd ? 0 : 1);
+}
+
+/** The audio check: dropouts in a rendered soundtrack. */
+async function audioCheck() {
+  if (!audioFile) return null;
+  const { readWav, dropouts, formatDropouts } = await import(path.join(dist, "audio/gaps.js"));
+  const found = dropouts(readWav(fs.readFileSync(path.resolve(audioFile))));
+  return { file: audioFile, dropouts: found, text: formatDropouts(found, audioFile) };
+}
+
+if (audioOnly) {
+  const a = await audioCheck();
+  console.log(argv.includes("--json") ? JSON.stringify({ audio: { file: a.file, dropouts: a.dropouts } }) : a.text);
+  process.exit(a.dropouts.length ? 1 : 0);
 }
 
 const { build } = need("esbuild");
@@ -143,7 +171,8 @@ window.__rompRun = async (from, to) => {
   await document.fonts.ready;
   const frames = [];
   for (let f = from; f <= to; f++) { ref.current.seekTo(f); await raf(); frames.push({ f, row: collectDom(root) }); }
-  return analyze(frames, { fps: E.fps, width: E.width, height: E.height, whips: E.whips, covered: E.covered, croppedFraction: E.croppedFraction, croppedSeconds: E.croppedSeconds, allowCrop: E.allowCrop, lostSeconds: E.lostSeconds, allowExit: E.allowExit });
+  const { component, props, durationInFrames, ...opts } = E;
+  return analyze(frames, { ...opts, fps: E.fps, width: E.width, height: E.height, strict: ${strict} || !!E.strict });
 };`,
     "check",
   );
@@ -161,12 +190,14 @@ window.__rompRun = async (from, to) => {
   const report = await page.evaluate(([a, b]) => window.__rompRun(a, b), [from, to]);
   await browser.close();
   server.close();
-  if (flag("json")) console.log(JSON.stringify(report));
+  const audio = await audioCheck();
+  if (flag("json")) console.log(JSON.stringify(audio ? { ...report, audio: { file: audio.file, dropouts: audio.dropouts } } : report));
   else {
     const { formatReport } = await import(path.join(dist, "check/analyze.js"));
     console.log(formatReport(report, meta.fps));
+    if (audio) console.log(audio.text);
   }
-  process.exit(report.issues.length ? 1 : 0);
+  process.exit(report.issues.length || audio?.dropouts.length ? 1 : 0);
 }
 
 if (cmd === "sound") {

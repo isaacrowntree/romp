@@ -1,6 +1,6 @@
 {
   "name": "romp",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Physics-baked character motion, a motion check and synthesised sound for videos made in code \u2014 Remotion, three.js or any seek(t) page, played live or rendered frame by frame.",
   "type": "module",
   "main": "./dist/index.js",
@@ -21,6 +21,10 @@
     "./check": {
       "types": "./dist/check/index.d.ts",
       "import": "./dist/check/index.js"
+    },
+    "./timing": {
+      "types": "./dist/timing/index.d.ts",
+      "import": "./dist/timing/index.js"
     },
     "./remotion": {
       "types": "./dist/remotion/index.d.ts",
@@ -97,7 +101,11 @@
     "lottie",
     "theatre.js",
     "motion-canvas",
-    "audio-reactive"
+    "audio-reactive",
+    "captions",
+    "subtitles",
+    "safe-area",
+    "text-timing"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/build-docs.mjs",

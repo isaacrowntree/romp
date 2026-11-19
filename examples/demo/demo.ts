@@ -2,7 +2,8 @@
  * (sparks where it hits), and a cast dropped into a pile, all baked once in a
  * planck world and read every frame. The shelf brightens on every kick drum,
  * read from the soundtrack's score (listen), not from a live analyser. Live mode plays it on the audio clock with sound; the same
- * schedule renders offline to a WAV; the motion check steps every frame.
+ * schedule renders offline to a WAV; the motion check steps every frame. A
+ * caption types in, timed by captionTiming, and is checked by the text rules.
  *
  * Build: `node examples/demo/build.mjs` → examples/demo/dist/romp-demo.js,
  * an ES module exporting mount(el). It styles itself from CSS custom
@@ -15,6 +16,7 @@ import { playLive, renderWav, type Schedule } from "../../src/audio/mix.js";
 import { cartoon } from "../../src/audio/cartoon.js";
 import { Instruments, listen } from "../../src/audio/index.js";
 import { Emitter, particleSample, particleStyle, sparks } from "../../src/particles/index.js";
+import { captionTiming } from "../../src/timing/index.js";
 
 const W = 800, H = 500, FPS = 30, DURATION = 7.5, FRAMES = Math.round(DURATION * FPS);
 const FLOOR = 470, SHELF = 205, SHELF_X0 = 250, SHELF_X1 = 550;
@@ -33,6 +35,9 @@ const CAST: Who[] = [
 // Flung in from above the top-right corner, inside the walls, aimed at the "p".
 const ZIP: Who = { id: "zip", color: "#34D399", voice: "loud", x: 760, size: 70, at: KNOCK_AT - 10, vx: -600 };
 const HAT = ["brim", "crown", "pom"] as const;
+// The caption: typed at 30 characters a second, held for its reading time, then faded.
+const CAPTION = "Every frame is read from one bake";
+const CAP_AT = 12, CAP = captionTiming(CAPTION, { exit: 0.2 }), CAP_CUT = 20; // the planted bug cuts it here, mid-word
 
 // ── The world, baked once ──────────────────────────────────────────────────
 function bake() {
@@ -148,6 +153,7 @@ export function mount(root: HTMLElement) {
 .romp-demo .rd-who>i{position:absolute;display:block}
 .romp-demo .rd-fx>i{display:block}
 .romp-demo .rd-burst{position:absolute;pointer-events:none}
+.romp-demo .rd-cap{position:absolute;left:60px;top:28px;padding:6px 14px;border-radius:12px;background:var(--rd-raised);border:1px solid var(--rd-line);color:var(--rd-fg);font:600 22px/1.3 var(--font-sans,system-ui);white-space:pre}
 .romp-demo .rd-bug{position:absolute;left:0;top:0;width:150px;height:46px;border-radius:23px;background:#FDE68A;color:#1A1730;font:700 18px/46px var(--font-sans,system-ui);text-align:center;transform-origin:50% 50%}
 .romp-demo .rd-controls{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin:.9rem 0 .6rem}
 .romp-demo .rd-controls .btn{min-height:44px}
@@ -166,6 +172,7 @@ export function mount(root: HTMLElement) {
   ${[...CAST, ZIP].map((c) => `<div class="rd-who" data-romp="${c.id}">${character(c)}</div>`).join("")}
   <div class="rd-fx" aria-hidden="true">${"<i></i>".repeat(SPARKS)}</div><div class="rd-burst" data-romp="sparks"></div>
   <div class="rd-bug" data-romp="sticker">new!</div>
+  <div class="rd-cap" data-romp="caption" data-romp-role="text" data-romp-text="${CAPTION}" data-romp-chars-total="${CAP.chars}"></div>
 </div></div>
 <div class="rd-controls">
   <button type="button" class="btn btn-primary" data-act="play">Play with sound</button>
@@ -175,6 +182,7 @@ export function mount(root: HTMLElement) {
 <div class="rd-controls">
   <button type="button" class="btn btn-outline-primary" data-act="check">Run the motion check</button>
   <label class="rd-check"><input type="checkbox" data-act="bug"> Plant a bug (a sticker that pops in)</label>
+  <label class="rd-check"><input type="checkbox" data-act="textbug"> Plant a text bug (the caption cut off mid-word)</label>
   <button type="button" class="btn btn-outline-primary" data-act="wav">Render WAV offline</button>
 </div>
 <pre aria-live="polite">The motion check report shows here.</pre>`;
@@ -185,6 +193,8 @@ export function mount(root: HTMLElement) {
   const time = root.querySelector<HTMLElement>(".rd-time")!;
   const report = root.querySelector<HTMLElement>("pre")!;
   const bugBox = root.querySelector<HTMLInputElement>('[data-act="bug"]')!;
+  const textBugBox = root.querySelector<HTMLInputElement>('[data-act="textbug"]')!;
+  const capEl = root.querySelector<HTMLElement>(".rd-cap")!;
   const letterEls = LETTERS.map((ch) => root.querySelector<HTMLElement>(`[data-romp="letter:${ch}"]`)!);
   const whoEls = [...CAST, ZIP].map((c) => root.querySelector<HTMLElement>(`[data-romp="${c.id}"]`)!);
   const bugEl = root.querySelector<HTMLElement>(".rd-bug")!;
@@ -261,6 +271,15 @@ export function mount(root: HTMLElement) {
     bugEl.style.display = dt < 0 ? "none" : "";
     bugEl.style.transform = `translate(${W - 190}px, 40px) scale(${Math.max(0.001, grow)}) rotate(-6deg)`;
     bugEl.style.opacity = bugBox.checked ? "1" : String(Math.min(1, Math.max(0, dt / 4)));
+    // The caption: typed, held whole for its reading time, faded out. The text bug cuts it mid-word.
+    const cf = Math.floor(f) - CAP_AT;
+    const end = textBugBox.checked ? CAP_CUT : CAP.totalFrames;
+    const on = cf >= 0 && cf < end;
+    capEl.style.display = on ? "" : "none";
+    const typed = on ? CAP.typed(cf) : 0;
+    capEl.textContent = CAPTION.slice(0, typed);
+    capEl.dataset.rompCharsShown = String(typed);
+    capEl.style.opacity = String(textBugBox.checked && on ? Math.min(1, (cf + 1) / 4) : Math.max(0, Math.min(1, (cf + 1) / 4, (end - cf) / CAP.exitFrames)));
     scrub.value = String(t);
     time.textContent = `${t.toFixed(1)} s`;
   }
@@ -336,11 +355,11 @@ export function mount(root: HTMLElement) {
     report.textContent =
       formatReport(r, FPS) +
       (r.issues.length
-        ? "\n\nUntick “Plant a bug” and run it again: the sticker then grows in, and the check passes."
-        : "\n\nNo pops, strobes, teleports, spikes or crops. The sharp turns are real impacts, marked as such; the character that flies in from off-frame is entering, so its partial crop is fine; and the sparks are checked as one burst that grows in and fades out. Tick “Plant a bug” to watch it catch one.");
+        ? "\n\nUntick the planted bugs and run it again: the sticker then grows in, the caption finishes and stays up long enough to read, and the check passes."
+        : "\n\nNo pops, strobes, teleports, spikes or crops. The sharp turns are real impacts, marked as such; the character that flies in from off-frame is entering, so its partial crop is fine; and the sparks are checked as one burst that grows in and fades out. The caption is tracked as text: it types in, stays whole for its reading time and sits inside the safe area. Tick a “Plant a bug” box to watch it catch one.");
   };
 
-  bugBox.onchange = () => seek(clock.t);
+  bugBox.onchange = textBugBox.onchange = () => seek(clock.t);
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches ? 6.5 : 0;
   seek(still);
   return { seek, clock, schedule, stage };

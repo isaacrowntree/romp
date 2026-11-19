@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.4.2","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.5.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -44,6 +44,22 @@
     <main id="main"><div class="shell">
 <section class="hero"><h1>Changelog</h1><p class="hero__lede">Every release, newest first. Versions follow SemVer.</p></section>
 <div class="prose changelog"><p>All notable changes to this project are documented here. Format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>; versions follow <a href="https://semver.org/">SemVer</a>.</p>
+<h2 id="0-5-0-2026-11-20">[0.5.0] — 2026-11-20</h2>
+<p>Words on screen and the soundtrack get checked too. A frame-by-frame review of a real portrait film turned up faults the motion check couldn't see: captions cut off mid-word when their scene ended, lines whole for barely a second, a speech bubble covering the very button it described, bubbles running off the edge, papers and dots crossing a title, empty bubbles, titles that sat blank under their underline while they retyped after every cut, and the music dropping out for half a second at segment joins. Each of those is now a rule, and the timing helpers make the right lengths the default.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong>Text rules</strong> in the motion check, for objects tracked with a <code>role</code> (<code>"text"</code>, <code>"focus"</code> or <code>"prop"</code>): <code>offsafe</code> (a legible text outside the safe area; <code>safeArea()</code> defaults to 5% of the long side at its ends and 3.5% of the short side, so 38/96 px at 1080×1920), <code>covers</code> (a text over the focus box), <code>overlap</code> (two texts, or a prop drawn over a text; a prop drawn under it is a backdrop), <code>unfinished</code> (gone, or its scene cut, before every character shows), <code>unread</code> (whole for less than its reading time), <code>empty</code> (a box with no words, or a heading still typing after it appears) and <code>stale</code> (opt-in: nothing moves long after the words were read). Each has its thresholds as options and an <code>allow</code> list (names, or a <code>prefix*</code>). New <code>Sample</code> fields: <code>role</code>, <code>chars: { shown, total }</code>, <code>text</code>, <code>words</code>, <code>heading</code>, <code>z</code>, <code>allow</code>; new options <code>scenes</code> (cuts), <code>strict</code>, <code>safe</code>, <code>reading</code> and the thresholds.</li>
+<li><strong>romp/timing</strong>: <code>readingTime(text, { wpm = 180, min = 1.5 })</code>, <code>wordCount</code>, <code>captionTiming(text, { cps = 30 })</code> (<code>typeFrames</code>, <code>holdFrames</code>, <code>totalFrames</code>, <code>typed(frame)</code>), <code>timeline(scenes)</code> (scene lengths from their captions, transitions that never land on a caption's reading window, 1.2 s act cards, and a <code>check</code> with the <code>covered</code> spans and cuts to spread into a check entry) and <code>captionAt</code>. Also exported from <code>romp</code> and <code>romp/remotion</code>.</li>
+<li><strong>romp/remotion</strong>: <code>trackText(name, text, { typed, heading })</code>, <code>track(name, { role, allow, z })</code> and <code>sceneSequence(scene)</code>. A <code>CheckEntry</code> takes any <code>analyze()</code> option.</li>
+<li><code>collectDom</code> reads <code>data-romp-role</code>, <code>data-romp-text</code>, <code>data-romp-chars-shown</code>, <code>data-romp-chars-total</code>, <code>data-romp-words</code>, <code>data-romp-heading</code>, <code>data-romp-allow</code> and <code>data-romp-z</code>, and records each element's paint order.</li>
+<li><strong>Audio check</strong>: <code>dropouts(buffer)</code> in romp/audio flags 0.1–1 s of near silence (30 dB under the bed) with sound on both sides; <code>readWav</code>, <code>rmsWindows</code>, <code>formatDropouts</code>. <code>romp check --audio file.wav</code> runs it, alone or with an entry. <code>crossfadeBed(synth, bus, sections, { fade })</code> writes one continuous bed with equal-power crossfades at every join.</li>
+<li><code>romp check --strict</code>: untagged tracked objects count as props for <code>overlap</code>, and <code>stale</code> runs. <code>formatReport</code> widens its kind column for the new kinds.</li>
+<li>Demo: a caption typed in with <code>captionTiming</code> and tracked as text, and a "Plant a text bug" toggle that cuts it off mid-word.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li>The text rules are on by default for anything with a role. A film that tags nothing reports exactly what it did before.</li>
+</ul>
 <h2 id="0-4-2-2026-11-19">[0.4.2] — 2026-11-19</h2>
 <h3 id="fixed">Fixed</h3>
 <ul>
@@ -117,6 +133,6 @@
 <li>Live demo page in <code>docs/</code> and a generated hero GIF.</li>
 </ul></div>
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.4.2 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.5.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>

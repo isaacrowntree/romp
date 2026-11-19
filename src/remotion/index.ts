@@ -8,17 +8,60 @@
  */
 export { collectDom } from "../check/dom.js";
 export { analyze, formatReport, type Report, type Issue, type Sample, type FrameRow } from "../check/analyze.js";
+export { captionTiming, captionAt, readingTime, timeline, type Timeline, type SceneSpec, type PlacedCaption } from "../timing/index.js";
+import type { AnalyzeOptions, Role, TextKind } from "../check/analyze.js";
+import type { Placement } from "../timing/index.js";
 import { particleSample, type Particle } from "../particles/index.js";
 
+export interface TrackOptions {
+  impact?: boolean;
+  seamless?: boolean;
+  allowCrop?: boolean;
+  allowExit?: boolean;
+  /** for the text rules: words to read, the highlighted thing being talked about, or a prop */
+  role?: Role;
+  /** text rules it may break on purpose */
+  allow?: TextKind[];
+  /** paint order, when CSS z-index puts it above or below its place in the document */
+  z?: number;
+}
+
 /** Data attributes for the motion check: spread them on the element to track. */
-export function track(name: string, o: { impact?: boolean; seamless?: boolean; allowCrop?: boolean; allowExit?: boolean } = {}): Record<string, string | undefined> {
+export function track(name: string, o: TrackOptions = {}): Record<string, string | undefined> {
   return {
     "data-romp": name,
     "data-romp-impact": o.impact ? "1" : undefined,
     "data-romp-seamless": o.seamless ? "1" : undefined,
     "data-romp-allow-crop": o.allowCrop ? "1" : undefined,
     "data-romp-allow-exit": o.allowExit ? "1" : undefined,
+    "data-romp-role": o.role,
+    "data-romp-allow": o.allow?.length ? o.allow.join(",") : undefined,
+    "data-romp-z": o.z != null ? String(o.z) : undefined,
   };
+}
+
+/**
+ * Track words on screen (a caption, a speech bubble, a heading) for the text
+ * rules: its whole text, and how many characters of it are showing.
+ *
+ *   const t = captionTiming(line);
+ *   const typed = t.typed(frame - from);
+ *   <div {...trackText(`bubble:${from}`, line, { typed })}>{line.slice(0, typed)}</div>
+ */
+export function trackText(name: string, text: string, o: TrackOptions & { typed?: number; heading?: boolean } = {}): Record<string, string | undefined> {
+  const total = [...text.replace(/\*/g, "")].length;
+  return {
+    ...track(name, { ...o, role: "text" }),
+    "data-romp-text": text.replace(/\*/g, ""),
+    "data-romp-chars-total": String(total),
+    "data-romp-chars-shown": String(Math.max(0, Math.min(total, o.typed ?? total))),
+    "data-romp-heading": o.heading ? "1" : undefined,
+  };
+}
+
+/** Props for a `<Sequence>` (or a `TransitionSeries.Sequence`'s length) from a placed scene. */
+export function sceneSequence(scene: Placement & { name?: string }): { from: number; durationInFrames: number; name?: string } {
+  return { from: scene.start, durationInFrames: scene.frames, name: scene.name };
 }
 
 /**
@@ -52,8 +95,10 @@ export function trackBurst(name: string, particles: readonly Particle[], o: { im
   };
 }
 
-/** What a `romp check` entry file default-exports. */
-export interface CheckEntry {
+/** What a `romp check` entry file default-exports. Any analyze() option goes
+ * here too (the text rules' `scenes`, `safe`, `allow`, `strict`, …): spread a
+ * timeline's `check` in. */
+export interface CheckEntry extends Omit<AnalyzeOptions, "fps" | "width" | "height"> {
   component: any;
   props?: Record<string, unknown>;
   durationInFrames: number;

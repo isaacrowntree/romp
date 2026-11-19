@@ -1,8 +1,8 @@
-<!-- {"title": "API reference — romp", "description": "Every export of romp: romp/core (Stage, Body, SpringyBody, Drop, Leap, poseAt, impactResponse, jiggleParts, Clock…), romp/check, romp/remotion, romp/three, romp/audio (listen, Score), romp/audio/cartoon, romp/particles, romp/theatre, romp/motion-canvas and romp/lottie.", "nav": "api", "path": "api.html"} -->
+<!-- {"title": "API reference — romp", "description": "Every export of romp: romp/core (Stage, Body, SpringyBody, Drop, Leap, poseAt, impactResponse, jiggleParts, Clock…), romp/check, romp/timing, romp/remotion, romp/three, romp/audio (listen, Score), romp/audio/cartoon, romp/particles, romp/theatre, romp/motion-canvas and romp/lottie.", "nav": "api", "path": "api.html"} -->
 <section class="hero"><h1>API reference</h1><p class="hero__lede">Every export, by entry point. The build fails if this page names anything romp doesn't export.</p></section>
 <div class="prose api">
 <nav class="toc" aria-label="Entry points">
-  <a href="#core">romp/core</a> · <a href="#check">romp/check</a> · <a href="#remotion">romp/remotion</a> · <a href="#three">romp/three</a> · <a href="#audio">romp/audio</a> · <a href="#cartoon">romp/audio/cartoon</a> · <a href="#particles">romp/particles</a> · <a href="#theatre">romp/theatre</a> · <a href="#motion-canvas">romp/motion-canvas</a> · <a href="#lottie">romp/lottie</a> · <a href="#cli">CLI</a>
+  <a href="#core">romp/core</a> · <a href="#check">romp/check</a> · <a href="#timing">romp/timing</a> · <a href="#remotion">romp/remotion</a> · <a href="#three">romp/three</a> · <a href="#audio">romp/audio</a> · <a href="#cartoon">romp/audio/cartoon</a> · <a href="#particles">romp/particles</a> · <a href="#theatre">romp/theatre</a> · <a href="#motion-canvas">romp/motion-canvas</a> · <a href="#lottie">romp/lottie</a> · <a href="#cli">CLI</a>
 </nav>
 
 <h2 id="core">romp/core</h2>
@@ -63,10 +63,21 @@ clock.play(from?) · clock.pause() · clock.seek(t) · clock.t · clock.playing<
 <h2 id="check">romp/check</h2>
 <h3 data-export="analyze" id="analyze">analyze</h3>
 <pre class="sig"><code>analyze(frames: { f, row: Record&lt;name, Sample&gt; }[], { fps?, width?, height?, whips?, covered?, impacts?, seamless?,
-        croppedFraction?: 0.25, croppedSeconds?: 0.5, allowCrop?: string[], lostSeconds?: 1, allowExit?: string[], strobePx?, teleportPx? }): Report
-Sample = { x, y, shown, onScreen, area, opacity, impact?, seamless?, box?: { x0, y0, x1, y1 }, allowCrop? }
-Report = { tracked, frames, issues: { frame, name, kind: "pop" | "strobe" | "teleport" | "spike" | "cropped" | "lost", detail }[] }</code></pre>
-<p>The cropped and lost checks run when both <code>width</code> and <code>height</code> are given.</p>
+        croppedFraction?: 0.25, croppedSeconds?: 0.5, allowCrop?: string[], lostSeconds?: 1, allowExit?: string[], strobePx?, teleportPx?,
+        // the text rules
+        scenes?: seconds[], strict?: false, safe?: share | { top, right, bottom, left }, offsafeSeconds?: 0.1,
+        coversFraction?: 0.05, coversSeconds?: 0.1, overlapFraction?: 0.02, overlapSeconds?: 0.2,
+        emptySeconds?: 0.2, headingSeconds?: 0.5, reading?: { wpm?: 180, min?: 1.5 }, stale?: boolean | seconds,
+        allow?: { offsafe?, covers?, overlap?, unfinished?, unread?, empty?, stale?: string[] } }): Report
+Sample = { x, y, shown, onScreen, area, opacity, impact?, seamless?, box?: { x0, y0, x1, y1 }, allowCrop?, allowExit?,
+           role?: "text" | "focus" | "prop", chars?: { shown, total }, text?, words?, heading?, z?, allow?: kind[] }
+Report = { tracked, frames, issues: { frame, name, kind, detail }[] }
+kind = "pop" | "strobe" | "teleport" | "spike" | "cropped" | "lost"
+     | "offsafe" | "covers" | "overlap" | "unfinished" | "unread" | "empty" | "stale"</code></pre>
+<p>The cropped, lost and offsafe checks run when both <code>width</code> and <code>height</code> are given. The text rules see only samples with a <code>role</code> (under <code>strict</code>, untagged ones are props).</p>
+<h3 data-export="safeArea" id="safeArea">safeArea · boxOverlap</h3>
+<pre class="sig"><code>safeArea(W, H, safe?): { top, right, bottom, left }     // px; 5% of the long side at its ends, 3.5% of the short side
+boxOverlap(a, b): px²                                     // the area two boxes share</code></pre>
 <h3 data-export="inFrameShare" id="inFrameShare">inFrameShare</h3>
 <pre class="sig"><code>inFrameShare(box, W, H): 0..1     // the share of a box inside the frame</code></pre>
 <h3 data-export="formatReport" id="formatReport">formatReport</h3>
@@ -74,13 +85,33 @@ Report = { tracked, frames, issues: { frame, name, kind: "pop" | "strobe" | "tel
 <h3 data-export="collectDom" id="collectDom">collectDom</h3>
 <pre class="sig"><code>collectDom(root = document.body): Record&lt;name, Sample&gt;     // every [data-romp] element, relative to root, with its box</code></pre>
 
+<h2 id="timing">romp/timing</h2>
+<h3 data-export="readingTime" id="readingTime">readingTime · wordCount</h3>
+<pre class="sig"><code>readingTime(text | words, { wpm?: 180, min?: 1.5 }): seconds     wordCount(text): number</code></pre>
+<h3 data-export="captionTiming" id="captionTiming">captionTiming</h3>
+<pre class="sig"><code>captionTiming(text, { cps?: 30, hold?: readingTime, enter?: 0, exit?: 0, fps?: 30, wpm?, min? }):
+  { chars, words, enterFrames, typeFrames, holdFrames, exitFrames, totalFrames, typed(frame): chars }</code></pre>
+<h3 data-export="timeline" id="timeline">timeline</h3>
+<pre class="sig"><code>timeline(scenes: { name, captions?: (string | { text, cps?, hold?, gap? })[], seconds?, act?, transition?: seconds | false }[],
+         { fps?: 30, transition?: 0.5, actSeconds?: 1.2, gap?: 0.15, lead?: 0.2, tail?: 0.2, cps?, wpm?, min? }):
+  { fps, frames, scenes: (spec &amp; { index, start, frames, transitionIn, transitionOut, captions: { text, from, to, at, timing }[] })[],
+    check: { covered, scenes } }</code></pre>
+<p>Each scene is at least as long as its captions need plus the transitions at both ends, so a transition never lands on a caption's reading window. <code>frames</code> counts the transitions (as Remotion's <code>TransitionSeries</code> does); <code>check</code> spreads into a <code>romp check</code> entry.</p>
+<h3 data-export="captionAt" id="captionAt">captionAt</h3>
+<pre class="sig"><code>captionAt(placedCaption, frameInScene): { on, typed, text }</code></pre>
+
 <h2 id="remotion">romp/remotion</h2>
 <h3 data-export="track" id="track">track</h3>
-<pre class="sig"><code>track(name, { impact?, seamless?, allowCrop? }): { "data-romp", "data-romp-impact"?, "data-romp-seamless"?, "data-romp-allow-crop"? }</code></pre>
+<pre class="sig"><code>track(name, { impact?, seamless?, allowCrop?, allowExit?, role?, allow?, z? }): { "data-romp", "data-romp-impact"?, …, "data-romp-role"? }</code></pre>
+<h3 data-export="trackText" id="trackText">trackText</h3>
+<pre class="sig"><code>trackText(name, text, { typed?, heading?, …track options }): { "data-romp", "data-romp-role": "text", "data-romp-text", "data-romp-chars-shown", "data-romp-chars-total", … }</code></pre>
+<p>Words on screen for the text rules: the whole text (<code>*highlight*</code> markers dropped) and how many characters are showing.</p>
+<h3 data-export="sceneSequence" id="sceneSequence">sceneSequence</h3>
+<pre class="sig"><code>sceneSequence(placedScene): { from, durationInFrames, name }     // props for a &lt;Sequence&gt;</code></pre>
 <h3 data-export="trackBurst" id="trackBurst">trackBurst</h3>
 <pre class="sig"><code>trackBurst(name, particles, { impact?, allowCrop?, allowExit? }): { "data-romp", …, style }</code></pre>
 <p>Props for an empty element covering a particle burst, centred where it comes from, at its strongest opacity: the motion check follows the burst as one object. Leave the particles themselves untracked.</p>
-<p>Also re-exports <code>collectDom</code>, <code>analyze</code> and <code>formatReport</code>. A <code>romp check</code> entry default-exports a <code>CheckEntry</code> (or a function of <code>--arg</code> returning one): <code>{ component, props?, durationInFrames, fps, width, height, whips?, covered?, croppedFraction?, croppedSeconds?, allowCrop? }</code>.</p>
+<p>Also re-exports <code>collectDom</code>, <code>analyze</code>, <code>formatReport</code>, <code>captionTiming</code>, <code>captionAt</code>, <code>timeline</code> and <code>readingTime</code>. A <code>romp check</code> entry default-exports a <code>CheckEntry</code> (or a function of <code>--arg</code> returning one): <code>{ component, props?, durationInFrames, fps, width, height, …any analyze() option }</code>; spread a timeline's <code>check</code> into it.</p>
 
 <h2 id="three">romp/three</h2>
 <h3 data-export="motionReport" id="motionReport">motionReport</h3>
@@ -104,6 +135,15 @@ renderWav(schedule, options): Promise&lt;string&gt;     // base64 WAV</code></pr
 <h3 data-export="fitTo" id="fitTo">fitTo · midiHz · rng · wavBase64 · LEAD</h3>
 <pre class="sig"><code>fitTo(pitchClasses, midi): midi     midiHz(midi): Hz     rng(seed): () =&gt; 0..1
 wavBase64(audioBuffer): string      LEAD = 1 / 30        // transients lead the picture by a frame</code></pre>
+<h3 data-export="crossfadeBed" id="crossfadeBed">crossfadeBed</h3>
+<pre class="sig"><code>crossfadeBed(synth, out, { from, to, write(out, t0, t1), level? }[], { fade?: 0.5 }): joins</code></pre>
+<p>One continuous bed: each section's end is stretched to the next one's start, each is written <code>fade / 2</code> past its joins, and an equal-power crossfade joins them.</p>
+<h3 data-export="dropouts" id="dropouts">dropouts · readWav · rmsWindows · formatDropouts</h3>
+<pre class="sig"><code>dropouts(audioBuffer | { sampleRate, channels }, { window?: 0.02, drop?: 30, floor?, min?: 0.1, max?: 1, around?: 0.25 }):
+  { t, duration, level, bed }[]                 // seconds; dBFS (-120 is silence)
+readWav(bytes): { sampleRate, channels: Float32Array[] }     // PCM 8/16/24/32-bit or float
+rmsWindows(audio, window?): dBFS[]     formatDropouts(dropouts, file?): string</code></pre>
+<p>A dropout is a run of 0.1–1&nbsp;s at least <code>drop</code> dB under the bed's median level, with sound on both sides. <code>romp check --audio file.wav</code> runs it.</p>
 <p>A <code>Schedule</code> is <code>(synth, buses, at) =&gt; void</code>, where <code>at(filmSeconds)</code> is a context time, or <code>null</code> for something already played.</p>
 <h3 data-export="listen" id="listen">listen</h3>
 <pre class="sig"><code>listen(schedule, { extend? }): Score</code></pre>
@@ -179,7 +219,9 @@ lottieFrames(anim, options): FrameRow[]          // goToAndStop(f, true) for eve
 collectLottie(anim, { layers?, width?, height? }): Record&lt;name, Sample&gt;</code></pre>
 
 <h2 id="cli">CLI</h2>
-<pre><code>romp check &lt;entry.tsx&gt; [--public dir] [--from s] [--to s] [--arg json] [--json]
+<pre><code>romp check &lt;entry.tsx&gt; [--public dir] [--from s] [--to s] [--arg json] [--strict] [--audio file.wav] [--json]
+romp check --audio &lt;file.wav&gt; [--json]
 romp check --lottie &lt;anim.json&gt; [--layers a,b] [--from s] [--to s] [--json]
 romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16]</code></pre>
+<p><code>romp check</code> exits 1 on any issue: motion, text or audio. <code>--strict</code> counts untagged objects as props for the overlap rule and runs the stale rule.</p>
 </div>

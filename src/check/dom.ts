@@ -6,13 +6,19 @@
  * may run off the frame's edge. Each sample carries its box for the cropped
  * check (pass the frame's `width` and `height` to analyze()). Coordinates are relative to
  * `root` (your composition's frame), so the page can be any size.
+ *
+ * For the text rules: `data-romp-role` ("text", "focus" or "prop"); on a text,
+ * `data-romp-text` (the whole text; else its textContent), `data-romp-chars-shown`
+ * and `data-romp-chars-total` (else all of it is shown), `data-romp-words`,
+ * `data-romp-heading`, and `data-romp-allow` ("offsafe,covers"). Each sample's
+ * `z` is its document order (later draws on top), unless `data-romp-z` says.
  */
-import type { Sample } from "./analyze.js";
+import type { Sample, TextKind } from "./analyze.js";
 
 export function collectDom(root: Element = document.body): Record<string, Sample> {
   const frame = root.getBoundingClientRect();
   const out: Record<string, Sample> = {};
-  root.querySelectorAll<HTMLElement>("[data-romp]").forEach((el) => {
+  root.querySelectorAll<HTMLElement>("[data-romp]").forEach((el, order) => {
     const name = el.dataset.romp!;
     const r = el.getBoundingClientRect();
     let opacity = 1;
@@ -38,6 +44,19 @@ export function collectDom(root: Element = document.body): Record<string, Sample
       allowCrop: el.dataset.rompAllowCrop === "1",
       allowExit: el.dataset.rompAllowExit === "1",
     };
+    const d = el.dataset;
+    const role = d.rompRole;
+    if (role === "text" || role === "focus" || role === "prop") sample.role = role;
+    sample.z = d.rompZ != null ? +d.rompZ : order;
+    if (d.rompAllow) sample.allow = d.rompAllow.split(",").map((k) => k.trim()) as TextKind[];
+    if (role === "text") {
+      const text = d.rompText ?? el.textContent ?? "";
+      const total = d.rompCharsTotal != null ? +d.rompCharsTotal : [...text].length;
+      sample.text = text;
+      sample.chars = { shown: d.rompCharsShown != null ? +d.rompCharsShown : total, total };
+      if (d.rompWords != null) sample.words = +d.rompWords;
+      if (d.rompHeading === "1") sample.heading = true;
+    }
     // Several elements with one name: keep the biggest (a character drawn twice for a keyline, say).
     if (!out[name] || sample.area > out[name].area) out[name] = sample;
   });

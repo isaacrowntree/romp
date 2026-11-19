@@ -26,10 +26,19 @@
  * swap for an identical twin) aren't pops; `allowCrop` objects (a deliberate
  * close-up, a background running off the edge) aren't cropped.
  *
+ * Text rules (text.ts) run over samples that carry a `role`: words a viewer has
+ * to read (`text`), the thing being talked about (`focus`) and everything else
+ * that moves (`prop`): offsafe, covers, overlap, unfinished, unread, empty and
+ * (opt-in) stale.
+ *
  * It only reads positions, so it works for anything you can seek: a realtime
  * page's seek(t), a frame renderer, three.js or the DOM (see collectDom and
  * romp/three).
  */
+import { textIssues, type TextOptions } from "./text.js";
+
+/** What a tracked object is, for the text rules. */
+export type Role = "text" | "focus" | "prop";
 
 export interface Sample {
   /** on-screen centre, px */
@@ -55,7 +64,25 @@ export interface Sample {
    * not its own: as it leaves the frame, the camera moved on and left it behind,
    * so it isn't lost */
   cameraLeft?: boolean;
+  /** what it is, for the text rules: words to read, the thing being talked about, or anything else */
+  role?: Role;
+  /** text: characters revealed so far, of all of them (typed or word-by-word reveals). Absent: all shown */
+  chars?: { shown: number; total: number };
+  /** text: the words, for its reading time */
+  text?: string;
+  /** text: its word count, when `text` isn't given */
+  words?: number;
+  /** text: a scene's heading (a title with an underline or frame): it should be whole as the scene starts */
+  heading?: boolean;
+  /** paint order (higher draws on top): a prop drawn under a text doesn't overlap it */
+  z?: number;
+  /** text rules this object may break on purpose */
+  allow?: TextKind[];
 }
+
+/** The text rules. */
+export type TextKind = "offsafe" | "covers" | "overlap" | "unfinished" | "unread" | "empty" | "stale";
+export type IssueKind = "pop" | "strobe" | "teleport" | "spike" | "cropped" | "lost" | TextKind;
 
 export interface FrameRow {
   f: number;
@@ -65,11 +92,11 @@ export interface FrameRow {
 export interface Issue {
   frame: number;
   name: string;
-  kind: "pop" | "strobe" | "teleport" | "spike" | "cropped" | "lost";
+  kind: IssueKind;
   detail: string;
 }
 
-export interface AnalyzeOptions {
+export interface AnalyzeOptions extends TextOptions {
   fps?: number;
   /** frame width in px: thresholds scale from 886 px unless given */
   width?: number;
@@ -149,6 +176,7 @@ export function analyze(frames: FrameRow[], o: AnalyzeOptions = {}): Report {
     }
   }
   if (o.width && o.height) issues.push(...cropped(frames, names, o, fps, hidden), ...lost(frames, names, o, fps, hidden));
+  issues.push(...textIssues(frames, names, o, fps, hidden));
   issues.sort((a, b) => a.frame - b.frame);
   return { tracked: names, frames: frames.length, issues };
 }
@@ -250,6 +278,6 @@ function lost(frames: FrameRow[], names: string[], o: AnalyzeOptions, fps: numbe
 /** Format a report for a terminal. */
 export function formatReport(r: Report, fps = 30): string {
   if (!r.issues.length) return `motion check: ${r.tracked.length} objects over ${r.frames} frames, no issues`;
-  const lines = r.issues.map((i) => `  ${String(i.frame).padStart(5)}  ${(i.frame / fps).toFixed(2).padStart(6)}s  ${i.kind.padEnd(8)} ${i.name}: ${i.detail}`);
+  const lines = r.issues.map((i) => `  ${String(i.frame).padStart(5)}  ${(i.frame / fps).toFixed(2).padStart(6)}s  ${i.kind.padEnd(10)} ${i.name}: ${i.detail}`);
   return `motion check: ${r.issues.length} issue(s) in ${r.tracked.length} objects over ${r.frames} frames\n${lines.join("\n")}`;
 }

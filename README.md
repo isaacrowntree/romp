@@ -22,6 +22,7 @@ romp encodes the fixes as a small library:
 - **Bake once, read every frame.** A scene is simulated once at a fixed 240 Hz and one pose per frame is stored. Reading a pose is a pure function of time, so the same motion plays in a live viewer, a frame-by-frame renderer, a scrubber and the motion check, identically.
 - **Impacts drive the picture and the sound.** Every landing is recorded with its speed. Squash, closed eyes, follow-through on hats and antennae, and the boing on the soundtrack all hang off the same impact.
 - **A motion check you can run in CI.** It steps every frame and flags **pops** (appears or vanishes at full size, opaque), **strobes** (more than ~100 px in one frame at 886 px wide), **teleports** (more than ~300 px), **spikes** (a kink in the motion), **lost** (a character that leaves the frame and stays out) and **crops** (more than a quarter of it outside the frame for more than half a second, other than while entering or leaving), with exemptions for real impacts, deliberate whips, covered frames, fades and objects you allow to crop.
+- **Words a viewer can read.** Track a caption, a speech bubble or a heading as text and the check also flags words outside the **safe area**, a bubble that **covers** the thing it's about, texts that **overlap** (or a prop drawn over a title), a caption **unfinished** when its scene cuts, one gone before it could be **read**, and an **empty** bubble or a heading still typing after its scene starts. `captionTiming()` and `timeline()` size scenes from their captions so a film passes by construction, and `romp check --audio` catches the soundtrack **dropping out** where pieces were joined.
 - **Sound that belongs to the picture.** Synthesised voices (marimba, bell, plucks, Rhodes, upright, kit, whooshes, plops, boings, gibberish character voices), a mix tuned for phone speakers, and one schedule function that plays live or renders offline. No samples, so there's nothing to license. The same schedule is also a **signal** the picture can react to (`listen()`: envelopes, beats, onsets), with no live analyser.
 - **Particles that render frame by frame.** Confetti, sparks, snow and fountains from a seeded emitter whose every particle is a pure function of the frame, so they work in Remotion (where real-time particle libraries can't).
 - **Bring your own timeline.** Adapters for Theatre.js and Motion Canvas, and the motion check for Lottie (After Effects) exports.
@@ -197,25 +198,97 @@ const report = await motionCanvasReport({ seek: (f) => player.playback.seek(f), 
 
 **Anything else:** build `{ f, row: { name: { x, y, shown, onScreen, area, opacity, box? } } }` per frame and call `analyze(frames, { fps, width, height })` from `romp/check` (the cropped and lost checks need `box`, `width` and `height`).
 
+### Text on screen: the text rules and timing helpers
+
+Captions typed into speech bubbles, headings over footage, a ring round the button being described: the motion check can't tell these from props unless you say what they are. Give a tracked object a **role** (`text`, `focus` or `prop`) and, for text, its words and how many characters are showing, and these rules run as well:
+
+| Issue | What it means |
+|---|---|
+| `offsafe` | A legible text's box isn't inside the safe area for more than 0.1 s. The default safe area keeps 5% of the long side at each of its ends (notch, rounded corners, status bar) and 3.5% of the short side at each edge: 38 px left and right and 96 px top and bottom at 1080×1920, the other way round at 1920×1080. Words must never touch the edge, unlike `cropped`'s 25% for props; sliding in or out is fine. `safe` takes a share or margins in px. |
+| `covers` | A text sits over the `focus` box (the highlighted thing it's talking about) for more than 0.1 s: a bubble covering the very button it describes. |
+| `overlap` | Two texts overlap, or a prop is drawn over a text (papers piling over a title, dots falling through it) for more than 0.2 s. A prop drawn *under* the text (lower `z`: the collector uses document order) is a backdrop, not an overlap. |
+| `unfinished` | A text disappears, or its scene cuts (`scenes`, or the start of a `covered` transition), before every character is shown: a caption cut off mid-word. |
+| `unread` | A text is whole for less than its reading time (`readingTime()`: 180 words a minute, never under 1.5 s) before it goes. |
+| `empty` | A bubble or heading box shows with no words for more than 0.2 s, or a heading (`heading: true`) is still typing 0.5 s after it appears: the blank title between scenes. A heading should arrive whole with its scene. |
+| `stale` | (with `--strict`, or `stale: true`) Nothing tracked changes for more than 3 s after every text on screen was read. |
+
+Every rule has its thresholds as options and an allow-list: `allow: { offsafe: ["credits"], covers: ["caption:*"] }` (a trailing `*` matches a prefix), or `allow` on the object (`track(name, { allow: ["covers"] })`, `data-romp-allow="covers"`). **The rules are on by default for anything with a role**, so a film that tags nothing sees no change. `--strict` (or `strict: true`) goes further: every untagged tracked object counts as a prop for `overlap`, and `stale` runs.
+
+**Remotion:** time captions with `captionTiming`, lay scenes out with `timeline`, and track the words.
+
+```tsx
+import { captionTiming, timeline, trackText, track, sceneSequence } from "romp/remotion";
+
+// The film as data: each scene is as long as its captions need (typing, then reading
+// time), transitions never land on a caption's reading window, act cards default to 1.2 s.
+export const film = timeline([
+  { name: "intro", seconds: 4 },
+  { name: "act-one", act: true },
+  { name: "confirm", captions: ["Is this yours?", "One tap and it's on your phone"] },
+], { fps: 30, transition: 0.5, cps: 30 });
+
+function Bubble({ text, from }: { text: string; from: number }) {
+  const frame = useCurrentFrame();
+  const t = captionTiming(text);
+  if (frame < from || frame >= from + t.totalFrames) return null;
+  const typed = t.typed(frame - from);
+  return <div {...trackText(`bubble:${from}`, text, { typed })} style={…}>{text.slice(0, typed)}</div>;
+}
+<div {...track("ring", { role: "focus" })} style={…} />          // what the bubble must not cover
+<h1 {...trackText("title", heading, { heading: true })}>{heading}</h1>
+
+// check.tsx: the timeline's transitions are `covered`, its scene starts are cuts
+export default { component: Film, durationInFrames: film.frames, fps: 30, width: 1080, height: 1920, ...film.check };
+```
+
+`film.scenes[i]` carries `start`, `frames`, `transitionIn`, `transitionOut` and its `captions` (`from`, `to`, `timing`); `sceneSequence(scene)` gives a `<Sequence>`'s `from` and `durationInFrames`, and `frames` is the length a `TransitionSeries.Sequence` wants. Without attributes for the characters, the collector reads the element's own text as all shown.
+
+**Framework-free:** the same data on any sample.
+
+```ts
+import { analyze, formatReport } from "romp/check";
+import { captionTiming } from "romp/timing";
+
+const t = captionTiming("Saved, and live on the phone");
+const frames = Array.from({ length: t.totalFrames }, (_, f) => ({ f, row: {
+  caption: { x: 540, y: 200, shown: true, onScreen: true, area: 8e4, opacity: 1, box: { x0: 140, y0: 150, x1: 940, y1: 250 },
+             role: "text", text: "Saved, and live on the phone", chars: { shown: t.typed(f), total: t.chars } },
+} }));
+console.log(formatReport(analyze(frames, { fps: 30, width: 1080, height: 1920 })));
+```
+
+### The soundtrack: dropouts, and one continuous bed
+
+A music bed that cuts to near silence for a moment and comes back reads as a glitch. It usually happens where separately written pieces were joined with a gap. `romp check --audio mix.wav` (or `dropouts(buffer)` from `romp/audio`) flags runs of 0.1–1 s at least 30 dB under the bed's typical level with sound on both sides; silence at the ends and longer rests are left alone.
+
+```bash
+bunx romp check --audio public/sound/mix.wav            # the audio alone
+bunx romp check check.tsx --audio public/sound/mix.wav  # both; either fails the command
+```
+
+`crossfadeBed(synth, bus.music, sections, { fade: 0.5 })` writes the music as one bed: each section's end is stretched to the next one's start, each is written a little past its joins, and an equal-power crossfade joins them.
+
 ### CLI
 
 ```bash
-romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--json]
+romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--strict] [--audio file.wav] [--json]
+romp check --audio <file.wav> [--json]
 romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]
 romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]
 ```
 
-`romp sound` bundles a module exporting `render(arg)` (an `AudioBuffer` or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.
+`romp check` exits 1 on any issue (motion, text or audio). `--strict` counts every untagged tracked object as a prop for the overlap rule and runs the stale rule. `romp sound` bundles a module exporting `render(arg)` (an `AudioBuffer` or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.
 
 ## Entry points
 
 | Import | What |
 |---|---|
 | `romp/core` | `Stage` (`add`, `bake`, `pose`, `get`), `Body`, `SpringyBody`, `Drop`, `Leap`, `LAYER`, `poseAt`, `poseAtTime`, `baked`; `impactResponse`, `landing`, `hop`, `idle`, `blinkAt`, `boing`, `jiggle`, `jiggleParts`, `rock`, `nearImpact`; `ease`, `spring`, `ringOut`, `stagger`; `Clock` |
-| `romp/check` | `analyze`, `formatReport`, `collectDom`, `inFrameShare` |
-| `romp/remotion` | `track`, `trackBurst`, `collectDom`, `analyze` |
+| `romp/check` | `analyze`, `formatReport`, `collectDom`, `inFrameShare`, `safeArea`, `boxOverlap` |
+| `romp/timing` | `readingTime`, `wordCount`, `captionTiming`, `timeline`, `captionAt` |
+| `romp/remotion` | `track`, `trackText`, `trackBurst`, `sceneSequence`, `captionTiming`, `captionAt`, `timeline`, `readingTime`, `collectDom`, `analyze` |
 | `romp/three` | `motionReport`, `screenBox`, `screenArea`, `opacityOf` |
-| `romp/audio` | `Synth`, `Instruments`, `createMix`, `renderOffline`, `renderWav`, `playLive`, `listen`, `Score`, `fitTo`, `wavBase64`, `LEAD` |
+| `romp/audio` | `Synth`, `Instruments`, `createMix`, `renderOffline`, `renderWav`, `playLive`, `listen`, `Score`, `fitTo`, `wavBase64`, `LEAD`, `crossfadeBed`, `dropouts`, `readWav`, `rmsWindows`, `formatDropouts` |
 | `romp/audio/cartoon` | `cartoon`, `VOICES` |
 | `romp/particles` | `Emitter`, `particlesAt`, `confetti`, `sparks`, `snow`, `fountain`, `particleStyle`, `drawParticles`, `particleBox`, `particleBounds`, `particleSample`, `hash01` |
 | `romp/theatre` | `seekSequence`, `followSequence`, `objectSample`, `objectsRow`, `theatreFrames`, `theatreReport` |

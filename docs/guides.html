@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Guides — romp</title>
-    <meta name="description" content="How to use romp: bake a physics scene and read poses, character motion from real impacts, live playback on the audio clock or offline rendering, synthesised sound from one schedule and the soundtrack as a signal, deterministic particles, and the motion check for Remotion, the DOM, three.js, Lottie, Theatre.js and Motion Canvas." />
+    <meta name="description" content="How to use romp: bake a physics scene and read poses, character motion from real impacts, live playback on the audio clock or offline rendering, synthesised sound from one schedule and the soundtrack as a signal, deterministic particles, and the motion check for Remotion, the DOM, three.js, Lottie, Theatre.js and Motion Canvas, with text rules for captions and headings and a dropout check for the soundtrack." />
     <link rel="canonical" href="https://isaacrowntree.com/romp/guides.html" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="romp" />
     <meta property="og:url" content="https://isaacrowntree.com/romp/guides.html" />
     <meta property="og:title" content="Guides — romp" />
-    <meta property="og:description" content="How to use romp: bake a physics scene and read poses, character motion from real impacts, live playback on the audio clock or offline rendering, synthesised sound from one schedule and the soundtrack as a signal, deterministic particles, and the motion check for Remotion, the DOM, three.js, Lottie, Theatre.js and Motion Canvas." />
+    <meta property="og:description" content="How to use romp: bake a physics scene and read poses, character motion from real impacts, live playback on the audio clock or offline rendering, synthesised sound from one schedule and the soundtrack as a signal, deterministic particles, and the motion check for Remotion, the DOM, three.js, Lottie, Theatre.js and Motion Canvas, with text rules for captions and headings and a dropout check for the soundtrack." />
     <meta property="og:image" content="https://isaacrowntree.com/romp/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.4.2","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.5.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -52,6 +52,8 @@
   <a href="#signal">Sound as a signal</a><br>
   <a href="#particles">Particles</a><br>
   <a href="#check">The motion check</a><br>
+  <a href="#text">Text on screen: the text rules and timing</a><br>
+  <a href="#dropouts">The soundtrack: dropouts and one bed</a><br>
   <a href="#timelines">Other timelines: Lottie, Theatre.js, Motion Canvas</a>
 </nav>
 
@@ -228,10 +230,57 @@ const { issues } = motionReport({ seek, scene, camera, fps: 30, W: 886, H: 1920,
 <h3>Anything else</h3>
 <p>Build <code>{ f, row: { name: { x, y, shown, onScreen, area, opacity, box? } } }</code> per frame and call <code>analyze(frames, { fps, width, height })</code>; <code>formatReport()</code> prints it.</p>
 <h3>The CLI</h3>
-<pre><code>romp check &lt;entry.tsx&gt; [--public dir] [--from s] [--to s] [--arg json] [--json]
+<pre><code>romp check &lt;entry.tsx&gt; [--public dir] [--from s] [--to s] [--arg json] [--strict] [--audio file.wav] [--json]
+romp check --audio &lt;file.wav&gt; [--json]
 romp check --lottie &lt;anim.json&gt; [--layers a,b] [--from s] [--to s] [--json]
 romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16]</code></pre>
-<p><code>romp check</code> bundles the entry with esbuild, plays it in headless Chromium with <code>@remotion/player</code> and seeks every frame. <code>romp sound</code> bundles a module exporting <code>render(arg)</code> (an <code>AudioBuffer</code> or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.</p>
+<p><code>romp check</code> bundles the entry with esbuild, plays it in headless Chromium with <code>@remotion/player</code> and seeks every frame. It exits 1 on any issue, motion, text or audio; <code>--strict</code> counts untagged objects as props for the overlap rule and runs the stale rule. <code>romp sound</code> bundles a module exporting <code>render(arg)</code> (an <code>AudioBuffer</code> or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.</p>
+
+<h2 id="text">Text on screen: the text rules and timing</h2>
+<p>Captions typed into speech bubbles, headings over footage, a ring round the button being described: the check can't tell these from props unless you say what they are. Give a tracked object a <strong>role</strong> (<code>text</code>, <code>focus</code> or <code>prop</code>) and, for text, its words and how many characters are showing, and these rules run as well. They're on by default for anything with a role, so a film that tags nothing sees no change.</p>
+<table>
+  <thead><tr><th>Issue</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td>offsafe</td><td>A legible text's box isn't inside the safe area for more than 0.1&nbsp;s. By default the long side keeps 5% at each end (a phone's notch, rounded corners and status bar) and the short side 3.5% at each edge: 38&nbsp;px left and right and 96&nbsp;px top and bottom at 1080×1920, the other way round at 1920×1080. Words must never touch the edge, unlike <code>cropped</code>'s 25% for props. Sliding in or out is fine. <code>safe</code> takes a share of each side, or margins in px.</td></tr>
+    <tr><td>covers</td><td>A text sits over the <code>focus</code> box, the highlighted thing it's talking about, for more than 0.1&nbsp;s: a bubble covering the very button it describes.</td></tr>
+    <tr><td>overlap</td><td>Two texts overlap, or a prop is drawn over a text (papers piling over a title, dots falling through it) for more than 0.2&nbsp;s. A prop drawn under the text (a lower <code>z</code>; the DOM collector uses document order) is a backdrop.</td></tr>
+    <tr><td>unfinished</td><td>A text disappears, or its scene cuts, before every character is shown: a caption cut off mid-word. Scene starts (<code>scenes</code>, seconds) and the start of every <code>covered</code> transition are cuts.</td></tr>
+    <tr><td>unread</td><td>A text is whole for less than its reading time before it goes. <code>readingTime(text)</code>: 180 words a minute, never under 1.5&nbsp;s; tune with <code>reading: { wpm, min }</code>.</td></tr>
+    <tr><td>empty</td><td>A bubble or heading box is visible with no words for more than 0.2&nbsp;s, or a heading is still typing 0.5&nbsp;s after it appears: the blank title between scenes. A heading should arrive whole with its scene.</td></tr>
+    <tr><td>stale</td><td>With <code>--strict</code> or <code>stale: true</code>: nothing tracked changes for more than 3&nbsp;s after every text on screen was read.</td></tr>
+  </tbody>
+</table>
+<p>Each rule's thresholds are options (<code>offsafeSeconds</code>, <code>coversFraction</code>, <code>coversSeconds</code>, <code>overlapFraction</code>, <code>overlapSeconds</code>, <code>emptySeconds</code>, <code>headingSeconds</code>, <code>reading</code>, <code>stale</code>), and each has an allow-list: <code>allow: { offsafe: ["credits"], covers: ["caption:*"] }</code> (a trailing <code>*</code> matches a prefix), or <code>allow</code> on the object.</p>
+<h3>Timing that passes by construction</h3>
+<p><code>captionTiming(text, { cps: 30 })</code> types a caption at 30 characters a second, then holds it whole for its reading time: <code>{ typeFrames, holdFrames, totalFrames, typed(frame) }</code>. <code>timeline(scenes, { transition: 0.5, actSeconds: 1.2 })</code> lays out a film from its scenes: each lasts at least as long as its captions need, the transitions at both ends are added on, so a transition never lands on a caption's reading window, and an act card is 1.2&nbsp;s unless you say otherwise. It hands back the <code>covered</code> spans and scene cuts the check wants.</p>
+<pre><code>import { captionTiming, timeline, trackText, track, sceneSequence } from "romp/remotion";
+
+export const film = timeline([
+  { name: "intro", seconds: 4 },
+  { name: "act-one", act: true },
+  { name: "confirm", captions: ["Is this yours?", "One tap and it's on your phone"] },
+], { fps: 30, transition: 0.5 });
+
+const t = captionTiming(text);
+const typed = t.typed(frame - from);
+&lt;div {...trackText(`bubble:${from}`, text, { typed })}&gt;{text.slice(0, typed)}&lt;/div&gt;
+&lt;div {...track("ring", { role: "focus" })} /&gt;                     // what the bubble must not cover
+&lt;h1 {...trackText("title", heading, { heading: true })}&gt;{heading}&lt;/h1&gt;
+
+// check.tsx
+export default { component: Film, durationInFrames: film.frames, fps: 30, width: 1080, height: 1920, ...film.check };</code></pre>
+<p>On a DOM page of your own, the attributes are <code>data-romp-role</code>, <code>data-romp-text</code>, <code>data-romp-chars-shown</code>, <code>data-romp-chars-total</code>, <code>data-romp-heading</code>, <code>data-romp-allow</code> and <code>data-romp-z</code>; without the character attributes, the collector reads the element's own text as all shown. Anywhere else, put <code>role</code>, <code>text</code> and <code>chars: { shown, total }</code> on the sample. The demo on the home page has a caption tracked this way: tick “Plant a text bug” and it's cut off mid-word.</p>
+
+<h2 id="dropouts">The soundtrack: dropouts and one bed</h2>
+<p>A music bed that drops to near silence for a moment and comes back reads as a glitch, usually where separately written pieces were joined with a gap. <code>romp check --audio mix.wav</code>, or <code>dropouts(buffer)</code> from <code>romp/audio</code>, flags runs of 0.1–1&nbsp;s at least 30&nbsp;dB under the bed's typical level with sound on both sides. Silence at the ends, and longer rests, are left alone.</p>
+<pre><code>bunx romp check --audio public/sound/mix.wav            # the audio alone
+bunx romp check check.tsx --audio public/sound/mix.wav  # both; either fails the command</code></pre>
+<p>To write one continuous bed across scene joins, give each section of the score its span and a writer: <code>crossfadeBed</code> stretches each section's end to the next one's start, writes each a little past its joins, and crossfades them with an equal-power curve.</p>
+<pre><code>import { crossfadeBed } from "romp/audio";
+crossfadeBed(s, bus.music, [
+  { from: 0, to: 12.4, write: (out, t0, t1) =&gt; groove(s, out, t0, t1) },
+  { from: 12.4, to: 40, write: (out, t0, t1) =&gt; pads(s, out, t0, t1) },
+], { fade: 0.6 });</code></pre>
 
 <h2 id="timelines">Other timelines: Lottie, Theatre.js, Motion Canvas</h2>
 <p>Anything you can seek can host romp's baked motion and be checked. These adapters are thin: none of them imports its library (each is an optional peer dependency), so they load anywhere and you pass in what they need.</p>
@@ -277,6 +326,6 @@ const report = await motionCanvasReport({ seek: (f) =&gt; player.playback.seek(f
 </div>
 
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.4.2 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.5.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>
