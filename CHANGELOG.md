@@ -3,6 +3,28 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.13.0] — 2026-11-20
+
+Voices with intention. Gibberish voices are understood by the melody of their
+words, not the words (the people who voice the best-known cartoon gibberish
+say as much), and measured reference speech in that style runs at about 4–6
+syllables a second, pitched up whole. romp's `babble` picked its pitches at
+random, so its melody said nothing.
+
+### Added
+- **`prosody(syllables, { swing, seed })`**: a line's melody as pitch per
+  syllable (`st0`, `st1` semitones, `gain`): each phrase drifts down, stressed
+  syllables get an accent, and the ending says what it is: a statement falls
+  4 semitones, a mid-sentence pause lifts 2, a question rises 5, an
+  exclamation is 3 higher and louder throughout.
+- Syllables carry **`end`** (`.`, `,`, `?`, `!`) from their punctuation
+  (Chinese punctuation too); a line without any ends as a statement.
+- **`babble({ shift })`**: pitch a voice up or down in semitones, formants
+  with it (a sped-up recording, not a pitch-shifted one).
+
+### Changed
+- `babble({ syllables })` sings the line's `prosody` instead of random steps.
+
 ## [0.12.0] — 2026-11-20
 
 Flow. Five reviews of a film's character animation, every frame against

@@ -36,6 +36,8 @@ export interface Syllable {
     text: string;
     /** the consonants before its vowel ("str" in "string"; "" for CJK): m, b and p close the lips first */
     onset?: string;
+    /** the last syllable before punctuation: how the phrase ends (a statement, a question, an exclamation, a pause mid-sentence) */
+    end?: "." | "?" | "!" | ",";
 }
 export interface SyllableOptions {
     /** syllables a second (default 8: brisk cartoon speech) */
@@ -56,6 +58,25 @@ export interface SyllableOptions {
  * seed give the same timing, so a mouth and a voice made from it agree.
  */
 export declare function syllables(text: string, o?: SyllableOptions): Syllable[];
+export interface Pitch {
+    /** semitones from the voice's base pitch at the syllable's start and end */
+    st0: number;
+    st1: number;
+    /** loudness relative to normal */
+    gain: number;
+}
+/**
+ * The melody of a line: what makes gibberish understandable is the intention in
+ * its pitch, not the words. Each phrase starts high and drifts down
+ * (declination); stressed syllables get a pitch accent; a statement falls at
+ * its end, a mid-sentence pause lifts a little (more to come), a question
+ * rises, and an exclamation is higher and louder throughout. `swing` (0–1) is
+ * how sing-song the voice is: seeded wobble around the contour.
+ */
+export declare function prosody(syl: readonly Syllable[], o?: {
+    swing?: number;
+    seed?: number;
+}): Pitch[];
 /** How long a line of syllables lasts (seconds). */
 export declare const speechLength: (syl: readonly Syllable[]) => number;
 export interface Speech {

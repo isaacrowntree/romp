@@ -56,8 +56,9 @@ rock(impacts, frame, fps?, { hz?, zeta?, max?, dir? }): { angle, squash }</code>
 <h3 data-export="syllables" id="syllables">syllables · talk · talkPose · speechLength</h3>
 <pre class="sig"><code>syllables(text, { rate = 8, seed?, fit?, pause = 0.16, gap = 0.03 }?): Syllable[]   // { t0, t1, vowel: "a"|"e"|"i"|"o"|"u"|"m", stress, text }
 talk(t, syllables, { lead = 2/30, closed = 3/30, onTwos = true }?): { open: 0..1, vowel, mouth: "closed"|"open"|"wide"|"round", talking, beat }
-talkPose(frame, t, syllables, seed?, talkOptions?): CharacterPose &amp; { speech }      speechLength(syllables): seconds</code></pre>
-<p>Words as timed syllables (English by vowel group, Chinese, Japanese and Korean by character), and the mouth for each moment. Pass the same list to <code>babble(t, dur, out, { syllables })</code> and the voice says what the mouth shows.</p>
+talkPose(frame, t, syllables, seed?, talkOptions?): CharacterPose &amp; { speech }
+prosody(syllables, { swing = 0.35, seed? }?): { st0, st1, gain }[]   // the line's melody: declination, accents, . , ? ! endings      speechLength(syllables): seconds</code></pre>
+<p>Words as timed syllables (English by vowel group, Chinese, Japanese and Korean by character), and the mouth for each moment. Pass the same list to <code>babble(t, dur, out, { syllables, shift })</code> and the voice says what the mouth shows, singing the line's <code>prosody</code>: a statement falls, a question rises, an exclamation is higher and louder. <code>shift</code> pitches the voice and its formants up (semitones), like a sped-up recording.</p>
 <h3 data-export="gaze" id="gaze">gaze</h3>
 <pre class="sig"><code>gaze(frame, { keys?: { at, x, y?, pursue? }[], seed?, wander = 0.18, saccade = 3, follow = 0.3, delay = 2 }?): { x, y, head, blink, dip }</code></pre>
 <p>Eyes that jump to a look in a few frames and hold it (with small drifts), blink on a big change, and a head that follows a couple of frames behind.</p>

@@ -53,6 +53,8 @@ export interface Syllable {
   text: string;
   /** the consonants before its vowel ("str" in "string"; "" for CJK): m, b and p close the lips first */
   onset?: string;
+  /** the last syllable before punctuation: how the phrase ends (a statement, a question, an exclamation, a pause mid-sentence) */
+  end?: "." | "?" | "!" | ",";
 }
 
 export interface SyllableOptions {
@@ -112,7 +114,12 @@ export function syllables(text: string, o: SyllableOptions = {}): Syllable[] {
       continue;
     }
     if (STOP.test(tok)) {
-      if (out.length) t += pause;
+      if (out.length) {
+        t += pause;
+        const last = out[out.length - 1];
+        const e = /[?？]/.test(tok) ? "?" : /[!！]/.test(tok) ? "!" : /[.。…]/.test(tok) ? "." : ",";
+        if (!last.end || e !== ",") last.end = e;
+      }
       continue;
     }
     if (CJK.test(tok)) {
@@ -126,6 +133,7 @@ export function syllables(text: string, o: SyllableOptions = {}): Syllable[] {
     const syl = wordSyllables(tok);
     syl.forEach((s, i) => say(s, syl.length > 1 ? i === 0 : tok.length > 3));
   }
+  if (out.length && !out[out.length - 1].end) out[out.length - 1].end = ".";
   if (o.fit && t > 0 && out.length) {
     const end = out[out.length - 1].t1;
     const k = o.fit / end;
@@ -133,6 +141,49 @@ export function syllables(text: string, o: SyllableOptions = {}): Syllable[] {
       s.t0 *= k;
       s.t1 *= k;
     }
+  }
+  return out;
+}
+
+export interface Pitch {
+  /** semitones from the voice's base pitch at the syllable's start and end */
+  st0: number;
+  st1: number;
+  /** loudness relative to normal */
+  gain: number;
+}
+
+/**
+ * The melody of a line: what makes gibberish understandable is the intention in
+ * its pitch, not the words. Each phrase starts high and drifts down
+ * (declination); stressed syllables get a pitch accent; a statement falls at
+ * its end, a mid-sentence pause lifts a little (more to come), a question
+ * rises, and an exclamation is higher and louder throughout. `swing` (0–1) is
+ * how sing-song the voice is: seeded wobble around the contour.
+ */
+export function prosody(syl: readonly Syllable[], o: { swing?: number; seed?: number } = {}): Pitch[] {
+  const swing = o.swing ?? 0.35, seed = o.seed ?? 1;
+  const out: Pitch[] = [];
+  let start = 0;
+  for (let i = 0; i < syl.length; i++) {
+    if (!syl[i].end && i < syl.length - 1) continue;
+    const end = syl[i].end ?? ".";
+    const n = i - start + 1;
+    const lift = end === "!" ? 3 : 0;
+    for (let k = start; k <= i; k++) {
+      const u = n > 1 ? (k - start) / (n - 1) : 1;
+      const s = syl[k];
+      let st = lift + 3 * (1 - u) + (s.stress ? 2 : 0) + (hash01(seed + 3, k) - 0.5) * 4 * swing;
+      let st1 = st - 0.3;
+      if (k === i) {
+        if (end === ".") st1 = st - 4;
+        else if (end === ",") st1 = st + 2;
+        else if (end === "?") { st += 2; st1 = st + 5; }
+        else if (end === "!") st1 = st + 2;
+      }
+      out.push({ st0: st, st1, gain: end === "!" ? (k === i ? 1.3 : 1.12) : s.stress ? 1.1 : 0.9 });
+    }
+    start = i + 1;
   }
   return out;
 }

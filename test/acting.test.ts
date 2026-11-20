@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alive, BLINK, blendPose, blinks, gaze, handoff, hop, jump, keepVolume, react, REACTION_FRAMES, reactionFrames, speechLength, syllables, takeCurve, takeLength, talk, talkPose, waddle } from "../src/core/index.js";
+import { alive, BLINK, prosody, blendPose, blinks, gaze, handoff, hop, jump, keepVolume, react, REACTION_FRAMES, reactionFrames, speechLength, syllables, takeCurve, takeLength, talk, talkPose, waddle } from "../src/core/index.js";
 
 describe("syllables", () => {
   it("counts English vowel groups, with a word-final silent e joining the one before", () => {
@@ -290,5 +290,33 @@ describe("flow (0.12)", () => {
     expect(handoff(9, 10)).toBe(0);
     expect(handoff(15, 10)).toBe(1);
     expect(handoff(12, 10)).toBeGreaterThan(0);
+  });
+});
+
+describe("voice melody (0.13)", () => {
+  it("marks how each phrase ends", () => {
+    const s = syllables("Hi there, you. Really? Yes!");
+    expect(s.map((x) => x.end).filter(Boolean)).toEqual([",", ".", "?", "!"]);
+    expect(syllables("no punctuation").at(-1)!.end).toBe(".");
+    expect(syllables("你好？").at(-1)!.end).toBe("?");
+  });
+  it("a statement falls at its end, a question rises", () => {
+    const st = prosody(syllables("It lands by itself."), { swing: 0 });
+    expect(st.at(-1)!.st1).toBeLessThan(st.at(-1)!.st0);
+    const q = prosody(syllables("It lands by itself?"), { swing: 0 });
+    expect(q.at(-1)!.st1).toBeGreaterThan(q.at(-1)!.st0 + 3);
+  });
+  it("a phrase drifts down (declination); an exclamation is higher and louder", () => {
+    const p = prosody(syllables("one two three four five six"), { swing: 0 });
+    expect(p[0].st0).toBeGreaterThan(p[5].st0);
+    const plain = prosody(syllables("We did it."), { swing: 0 }), shout = prosody(syllables("We did it!"), { swing: 0 });
+    expect(shout[0].st0).toBeGreaterThan(plain[0].st0);
+    expect(shout.at(-1)!.gain).toBeGreaterThan(plain.at(-1)!.gain);
+  });
+  it("stressed syllables get a pitch accent", () => {
+    const s = syllables("banana split", { seed: 1 });
+    const p = prosody(s, { swing: 0 });
+    const i = s.findIndex((x) => x.stress);
+    expect(p[i].st0).toBeGreaterThan(p[i + 1].st0);
   });
 });

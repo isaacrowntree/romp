@@ -17,6 +17,7 @@
   Every tonal voice goes through the synth's `fit`, so it sits in the score's key.
 */
 import { rng } from "./synth.js";
+import { prosody } from "../core/acting.js";
 /** Formant pairs (Hz) for a few vowels: a, e, i, o, u, and a schwa. */
 const VOWELS = [[800, 1200], [500, 1900], [320, 2400], [500, 900], [350, 800], [550, 1500]];
 /** Voice presets for `babble`: base pitch (Hz), how sing-song (0..1), how fast (syllables/s). */
@@ -96,29 +97,31 @@ export function cartoon(s) {
     };
     /** A character talking: syllables of gibberish for `dur` seconds. `voice` is a
      * VOICES key or your own { f0, swing, rate }. */
-    s.babble = (t, dur, out, { voice = "hero", vel = 0.11, seed = 1, pan = 0, syllables } = {}) => {
-        const V = typeof voice === "string" ? VOICES[voice] ?? VOICES.hero : voice;
+    s.babble = (t, dur, out, { voice = "hero", vel = 0.11, seed = 1, pan = 0, syllables, shift = 0 } = {}) => {
+        const V0 = typeof voice === "string" ? VOICES[voice] ?? VOICES.hero : voice;
+        // `shift` pitches the whole voice up (semitones), formants too, the way a sped-up recording sounds.
+        const V = shift ? { ...V0, f0: V0.f0 * 2 ** (shift / 12) } : V0;
+        const fk = 2 ** (shift / 12);
         const r = rng(seed * 101 + Math.round(V.f0));
         const p = s.pan(pan, out);
         if (syllables) {
             // The given syllables (romp/core `syllables()`): their own times and
             // vowels, so a mouth drawn from the same list moves with the voice.
             const VI = { a: 0, e: 1, i: 2, o: 3, u: 4, m: 5 };
+            // The line's melody (romp/core `prosody`): intention carried by pitch.
+            const mel = prosody(syllables, { swing: V.swing, seed });
             syllables.forEach((sy, i) => {
                 const at = t + sy.t0, len = sy.t1 - sy.t0;
                 if (sy.t0 >= dur)
                     return;
-                const [f1, f2] = VOWELS[VI[sy.vowel] ?? 5];
-                const steps = [0, 2, 4, 7, 9, 12];
-                const st = steps[Math.floor(r() * (2 + V.swing * 4))] + (sy.stress ? 2 : 0);
-                const next = syllables[i + 1];
-                const end = !next || next.t0 - sy.t1 > 0.1 ? -3 : 1; // down before a pause
-                const f = V.f0 * 2 ** (st / 12);
-                const v = vel * (sy.vowel === "m" ? 0.5 : sy.stress ? 1.15 : 0.9);
+                const [f1, f2] = VOWELS[VI[sy.vowel] ?? 5].map((x) => x * fk);
+                const pm = mel[i];
+                const f = V.f0 * 2 ** (pm.st0 / 12);
+                const v = vel * pm.gain * (sy.vowel === "m" ? 0.5 : 1);
                 const src = ctx.createOscillator();
                 src.type = "sawtooth";
                 src.frequency.setValueAtTime(f, at);
-                src.frequency.linearRampToValueAtTime(f * 2 ** (end / 12), at + len * 0.9);
+                src.frequency.linearRampToValueAtTime(V.f0 * 2 ** (pm.st1 / 12), at + len * 0.9);
                 const a = s.filter("bandpass", f1, 6), b = s.filter("bandpass", f2, 8);
                 const ga = s.gain(1), gb = s.gain(0.55);
                 const env = ctx.createGain();
@@ -138,7 +141,7 @@ export function cartoon(s) {
         let i = 0;
         while (at < t + dur - 0.05) {
             const len = (1 / V.rate) * (0.7 + r() * 0.6);
-            const [f1, f2] = VOWELS[Math.floor(r() * VOWELS.length)];
+            const [f1, f2] = VOWELS[Math.floor(r() * VOWELS.length)].map((x) => x * fk);
             // Sing-song contour: up a pentatonic step or two, down at phrase ends.
             const steps = [0, 2, 4, 7, 9, 12];
             const st = steps[Math.floor(r() * (2 + V.swing * 4))];
