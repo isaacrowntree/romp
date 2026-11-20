@@ -3,6 +3,39 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.12.0] — 2026-11-20
+
+Flow. Five reviews of a film's character animation, every frame against
+reference footage, agreed on what still read as mechanical: a take that
+jumped from squash to full stretch in one frame (the "smear" was a bigger
+copy of the pose, not an in-between), a hat locked to the body, an
+anticipation that only squinted, mouths flickering a new shape every frame,
+blinks firing during pursuit, and a double take too quick to see.
+
+### Changed
+- **Takes pop through 3 frames**: a half-way in-between stretched along the
+  move (the smear, `smear: 1` from `takeCurve`), then past the accent, then
+  the accent (hard: `pop` 2, `hold` 3).
+- **`react("surprise")`**: the anticipation sinks and squashes the body (0.85)
+  and tips the hat down; the accent widens the eyes (`eyeScale` 1.25 → 1.1);
+  the hat follows the body on a spring, a frame behind, and carries past it;
+  loose parts start moving as the anticipation ends.
+- **`react("doubleTake")`**: the first look, a look away with a blink, then
+  the take, each look a 3-frame saccade; `lead` sets how long (24 frames reads
+  on screen). `reactionFrames(kind, o)`.
+- **`talk()`**: mouths held on twos (`onTwos`), the jaw stays open between the
+  syllables of a word, m/b/p/f/v closures last 3 frames.
+- **`talkPose()`**: a slow lean across the phrase, a dip and nod on stresses,
+  led by a small lift.
+- **`gaze()`**: no blink when a look ends a pursuit or within 12 frames of
+  another; the short blink for medium looks, the long one only for big ones.
+- **`jump()`**: the hat drags 2 frames behind.
+
+### Added
+- `follow(curve, frame)`: a loose part as a damped spring dragging after any
+  curve. `blendPose(a, b, w)` and `handoff(frame, at, frames)` for hand-offs
+  between behaviours.
+
 ## [0.11.0] — 2026-11-20
 
 Tuned against reference. Studying slapstick reference frame by frame (how long

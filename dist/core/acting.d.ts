@@ -74,8 +74,11 @@ export interface TalkOptions {
     /** seconds the mouth runs ahead of the sound (default 2 frames at 30 fps: the
      * eye reads a mouth shape before the ear hears it, so lip-sync is drawn early) */
     lead?: number;
-    /** seconds the lips stay shut before a vowel after m, b or p (default 2 frames) */
+    /** seconds the lips stay shut before a vowel after m, b or p (default 3 frames) */
     closed?: number;
+    /** hold each mouth for 2 frames (animate on twos, as hand-drawn lip-sync does), default true */
+    onTwos?: boolean;
+    fps?: number;
 }
 /**
  * The mouth at `t` seconds into a line (sound time): each syllable snaps open
@@ -166,9 +169,9 @@ export interface TakeOptions {
     anticDepth?: number;
     /** "hard" pops to the accent, holds, and bounces back; "soft" eases in (default "hard") */
     accent?: "hard" | "soft";
-    /** frames to reach the accent (default 1 hard, 9 soft) */
+    /** frames to reach the accent (default 2 hard: an in-between and an overshoot; 9 soft) */
     pop?: number;
-    /** frames the extreme is held (default 2 hard, 0 soft) */
+    /** frames the extreme is held (default 3 hard, 0 soft) */
     hold?: number;
     /** hard accents: one stretched in-between frame past the accent on the way in
      * (the smear a fast move leaves); default true */
@@ -195,6 +198,7 @@ export declare function takeCurve(dt: number, o?: TakeOptions): {
     v: number;
     phase: TakePhase;
     pop: number;
+    smear: number;
 };
 export type Reaction = "surprise" | "doubleTake" | "realize" | "tremble" | "giggle" | "nod" | "shake";
 export interface Reacting {
@@ -207,11 +211,29 @@ export interface Reacting {
     lookX?: number;
     /** the accent's pop and hold (a deliberate change of speed): mark it as a contact for the motion check */
     contact: boolean;
+    /** eye size (1 = as drawn): wide with surprise */
+    eyeScale?: number;
     /** finished (back to idle) */
     done: boolean;
 }
+/** Frames a reaction lasts with these options (a double take's lead can be set). */
+export declare function reactionFrames(kind: Reaction, o?: {
+    lead?: number;
+}): number;
 /** How long each reaction takes (frames at 30 fps). */
 export declare const REACTION_FRAMES: Record<Reaction, number>;
+/**
+ * A loose part following a curve: a damped spring (about 0.55 rad a frame,
+ * damping 0.45) pulled toward the curve's value one frame late, stepped frame
+ * by frame from rest. It lags the body, carries past it, and settles: drag and
+ * follow-through. Pure: the same curve gives the same result at any frame.
+ */
+export declare function follow(curve: (frame: number) => number, frame: number, o?: {
+    w?: number;
+    zeta?: number;
+    delay?: number;
+    from?: number;
+}): number;
 /**
  * A reaction from `at`, built as a take:
  * - surprise: squash and squint (anticipation), pop tall with eyes wide, a round
@@ -229,7 +251,12 @@ export declare const REACTION_FRAMES: Record<Reaction, number>;
 export declare function react(frame: number, at: number, kind: Reaction, o?: {
     seed?: number;
     strength?: number;
+    lead?: number;
 }): Reacting;
+/** Two poses mixed: w = 0 is `a`, 1 is `b` (every number interpolated, so a hand-off never jumps). */
+export declare function blendPose(a: CharacterPose, b: CharacterPose, w: number): CharacterPose;
+/** The weight of a hand-off at `frame` that starts at `at` and takes `frames` (smoothstep): 0 before, 1 after. */
+export declare const handoff: (frame: number, at: number, frames?: number) => number;
 export interface Waddling {
     /** degrees to rotate the body about its feet (positive leans right) */
     angle: number;

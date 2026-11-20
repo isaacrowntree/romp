@@ -114,19 +114,28 @@ export const speechLength = (syl) => (syl.length ? syl[syl.length - 1].t1 : 0);
  * first frames after m, b or p. The mouth leads the sound by `lead` (2 frames).
  */
 export function talk(t0, syl, o = {}) {
-    const t = t0 + (o.lead ?? 2 / 30);
+    const fps = o.fps ?? 30;
+    let t = t0 + (o.lead ?? 2 / fps);
+    // On twos: every mouth is held at least 2 frames (no 1-frame flicker).
+    if (o.onTwos ?? true)
+        t = Math.floor(t * (fps / 2)) / (fps / 2);
     const end = speechLength(syl);
-    let s;
-    for (const x of syl)
-        if (t >= x.t0 && t < x.t1)
-            s = x;
-    if (!s)
+    let idx = -1;
+    for (let k = 0; k < syl.length; k++)
+        if (t >= syl[k].t0 && t < syl[k].t1)
+            idx = k;
+    if (idx < 0)
         return { open: 0, vowel: "m", mouth: "closed", talking: t >= 0 && t < end, beat: 0 };
+    const s = syl[idx], next = syl[idx + 1];
     const len = s.t1 - s.t0, u = (t - s.t0) / len;
-    // m, b, p: the lips meet before the vowel (at least 2 frames shut).
-    if (s.onset && /[mbp]$/.test(s.onset) && t - s.t0 < (o.closed ?? 2 / 30))
+    // m, b, p (and f, v) close the lips before the vowel: at least 3 frames shut.
+    if (s.onset && /[mbpfv]$/.test(s.onset) && t - s.t0 < (o.closed ?? 3 / fps))
         return { open: 0, vowel: s.vowel, mouth: "closed", talking: true, beat: 0 };
-    const env = u < 0.6 ? 1 : Math.max(0, 1 - (u - 0.6) / 0.35); // vowels pop open, no in-between
+    // Inside a word the jaw doesn't shut between syllables (unless the next one starts on the lips).
+    const joined = !!next && next.t0 - s.t1 < 0.02 && !(next.onset && /[mbpfv]$/.test(next.onset));
+    let env = u < 0.6 ? 1 : Math.max(0, 1 - (u - 0.6) / 0.35); // vowels pop open, no in-between
+    if (joined)
+        env = Math.max(env, 0.5);
     const peak = s.vowel === "m" ? 0.15 : s.stress ? 1 : 0.75;
     const open = env * peak;
     const mouth = open < 0.2 ? "closed" : s.vowel === "o" || s.vowel === "u" ? "round" : s.vowel === "i" ? "wide" : "open";
@@ -138,9 +147,13 @@ export function talkPose(frame, t, syl, seed = 0, o = {}) {
     // The head's beat leads the sound further than the mouth (3–4 frames).
     const ahead = talk(t + 2 / 30, syl, o);
     const i = alive(frame, seed);
-    // Talking is in the mouth: the body barely moves (a small jaw squash, a nod on stresses).
-    const squashY = i.squashY + 0.015 * sp.open - 0.03 * ahead.beat;
-    return { ...i, squashY, squashX: i.squashX * keepVolume(squashY / i.squashY), tilt: i.tilt + 5 * ahead.beat, speech: sp };
+    // Talking is mostly in the mouth, but the body carries the phrase: a slow
+    // lean across it, and a dip with a nod on each stressed syllable, led by a
+    // small lift 3 frames before (its anticipation).
+    const lift = talk(t + 5 / 30, syl, o).beat - ahead.beat;
+    const squashY = i.squashY + 0.012 * sp.open - 0.04 * ahead.beat + 0.015 * Math.max(0, lift);
+    const lean = 3 * Math.sin((2 * Math.PI * frame) / 84 + seed);
+    return { ...i, squashY, squashX: i.squashX * keepVolume(squashY / i.squashY), tilt: i.tilt + lean + 6 * ahead.beat, speech: sp };
 }
 // ── Eyes ──────────────────────────────────────────────────────────────────
 /** Blink shapes (0 open … 1 shut), frame by frame at 30 fps: they close fast and
@@ -168,12 +181,13 @@ export function gaze(frame, o = {}) {
     const from = Math.min(keys[0]?.at ?? 0, frame) - 240;
     // Pursuit: a look marked `pursue` glides to the next key's, in small steps every frame.
     keys.forEach((k, i) => {
-        steps.push({ at: k.at, x: k.x, y: k.y ?? 0 });
+        // A look that ends a pursuit (the eyes are already there) brings no blink.
+        steps.push({ at: k.at, x: k.x, y: k.y ?? 0, pursuit: !!keys[i - 1]?.pursue });
         const next = keys[i + 1];
         if (k.pursue && next)
             for (let f = k.at + 1; f < next.at; f++) {
                 const u = (f - k.at) / (next.at - k.at);
-                steps.push({ at: f, x: k.x + (next.x - k.x) * u, y: (k.y ?? 0) + ((next.y ?? 0) - (k.y ?? 0)) * u });
+                steps.push({ at: f, x: k.x + (next.x - k.x) * u, y: (k.y ?? 0) + ((next.y ?? 0) - (k.y ?? 0)) * u, pursuit: true });
             }
     });
     if (wander > 0) {
@@ -199,7 +213,7 @@ export function gaze(frame, o = {}) {
         if (u > 0 && u < 1)
             dip = Math.max(dip, Math.sin(Math.PI * u) * Math.min(1, d));
     }
-    let x = 0, y = 0, head = 0, blink = 0, px = 0, py = 0;
+    let x = 0, y = 0, head = 0, blink = 0, px = 0, py = 0, lastBlink = -Infinity;
     for (const s of steps) {
         if (s.at > frame)
             break;
@@ -217,8 +231,13 @@ export function gaze(frame, o = {}) {
         // large gaze shift): a long blink, 3 closing, 2 shut, 4 opening. Mid-sized
         // looks blink sometimes, more often the bigger they are.
         const ad = Math.abs(dx), e = frame - s.at;
-        if (e >= 0 && e < LONG_BLINK.length && (ad >= 0.5 || (ad >= 0.3 && hash01(seed + 7, s.at) < (ad - 0.3) / 0.2)))
-            blink = Math.max(blink, LONG_BLINK[e]);
+        const wants = !s.pursuit && s.at - lastBlink >= 12 && (ad >= 0.5 || (ad >= 0.3 && hash01(seed + 7, s.at) < (ad - 0.3) / 0.2));
+        if (wants) {
+            lastBlink = s.at;
+            const shape = ad >= 0.9 ? LONG_BLINK : BLINK;
+            if (e >= 0 && e < shape.length)
+                blink = Math.max(blink, shape[e]);
+        }
         px = s.x;
         py = s.y;
     }
@@ -247,7 +266,8 @@ export function jump(frame, at, o = {}) {
         const sy = 1 + 0.13 * give * Math.abs(v) ** 1.5; // stretched by speed, round at the top
         return {
             y: -H * 4 * u * (1 - u),
-            pose: { squashY: sy, squashX: keepVolume(sy), tilt: -12 * v, lift: 3 * v, blink: 0, jiggle: jiggle(frame - off, 0.5) },
+            // The hat drags 2 frames behind the body (follow-through).
+            pose: { squashY: sy, squashX: keepVolume(sy), tilt: -12 * (1 - 2 * Math.max(0, frame - 2 - off) / air), lift: 3 * (1 - 2 * Math.max(0, frame - 2 - off) / air), blink: 0, jiggle: jiggle(frame - off, 0.5) },
             contact: frame - off <= 1,
             phase: "air",
         };
@@ -259,7 +279,7 @@ export function jump(frame, at, o = {}) {
 /** Frames a take lasts with these options (Infinity if it keeps its settle). */
 export function takeLength(o = {}) {
     const hard = (o.accent ?? "hard") === "hard";
-    return (o.antic ?? 6) + (o.pop ?? (hard ? 1 : 9)) + (o.hold ?? (hard ? 2 : 0)) + (o.settle ?? 9) + (o.keep ?? 8) + (o.release ?? 10);
+    return (o.antic ?? 6) + (o.pop ?? (hard ? 2 : 9)) + (o.hold ?? (hard ? 3 : 0)) + (o.settle ?? 9) + (o.keep ?? 8) + (o.release ?? 10);
 }
 /**
  * A take's curve at `dt` frames from its start: 0 at rest, −anticDepth at the
@@ -269,36 +289,45 @@ export function takeLength(o = {}) {
  */
 export function takeCurve(dt, o = {}) {
     const hard = (o.accent ?? "hard") === "hard";
-    const antic = o.antic ?? 6, depth = o.anticDepth ?? 0.35, pop = o.pop ?? (hard ? 1 : 9), hold = o.hold ?? (hard ? 2 : 0);
+    const antic = o.antic ?? 6, depth = o.anticDepth ?? 0.35, pop = Math.max(1, o.pop ?? (hard ? 2 : 9)), hold = o.hold ?? (hard ? 3 : 0);
     const settle = o.settle ?? 9, level = o.settleLevel ?? 0.5, keep = o.keep ?? 8, release = o.release ?? 10;
     const t1 = antic, t2 = t1 + pop, t3 = t2 + hold, t4 = t3 + settle, t5 = t4 + keep, t6 = t5 + release;
+    const at = (v, phase, smear = 0) => ({ v, phase, pop: t2, smear });
     if (dt < 0)
-        return { v: 0, phase: "rest", pop: t2 };
+        return at(0, "rest");
     // Out of the start gently, into the anticipation pose slowly (ease-in-out, weighted to the end).
     if (dt < t1)
-        return { v: -depth * (1 - Math.pow(1 - smooth(dt / t1), 1.6)), phase: "antic", pop: t2 };
-    // The smear: the first frame out of the anticipation overshoots the accent, stretched along the move.
-    if (hard && (o.smear ?? true) && dt === t1)
-        return { v: 1.3, phase: "accent", pop: t2 };
+        return at(-depth * (1 - Math.pow(1 - smooth(dt / t1), 1.6)), "antic");
     if (dt < t2) {
-        const u = (dt - t1 + 1) / pop; // hard: the very next frame is the accent
-        return { v: -depth + (1 + depth) * (hard ? Math.min(1, u) : 1 - Math.pow(1 - Math.min(1, u), 3)), phase: "accent", pop: t2 };
+        const u = (dt - t1 + 1) / pop;
+        if (hard) {
+            // The pop: a fast in-between (half way, stretched along the move: the
+            // smear), then past the accent (an overshoot), then the accent itself.
+            if (dt === t1)
+                return at(0.5, "accent", o.smear ?? true ? 1 : 0);
+            return at(1 + 0.12 * (1 - (dt - t1 - 1) / Math.max(1, pop - 1)), "accent");
+        }
+        return at(-depth + (1 + depth) * (1 - Math.pow(1 - Math.min(1, u), 3)), "accent");
     }
     if (dt < t3)
-        return { v: 1, phase: "accent", pop: t2 };
+        return at(1, "accent");
     if (dt < t4) {
         const u = (dt - t3) / settle;
         // Hard: bounce back past the settle and in (a damped spring); soft: ease in (no bounce).
         const k = hard ? Math.exp(-4.2 * u) * Math.cos(Math.PI * 1.6 * u) : Math.pow(1 - u, 3);
-        return { v: level + (1 - level) * k, phase: "settle", pop: t2 };
+        return at(level + (1 - level) * k, "settle");
     }
     if (dt < t5 || !Number.isFinite(release))
-        return { v: level, phase: "settle", pop: t2 };
+        return at(level, "settle");
     if (dt < t6)
-        return { v: level * (1 - smooth((dt - t5) / release)), phase: "release", pop: t2 };
-    return { v: 0, phase: "done", pop: t2 };
+        return at(level * (1 - smooth((dt - t5) / release)), "release");
+    return at(0, "done");
 }
 const SURPRISE = { antic: 6, anticDepth: 0.4, accent: "hard", settleLevel: 0.45 };
+/** Frames a reaction lasts with these options (a double take's lead can be set). */
+export function reactionFrames(kind, o = {}) {
+    return kind === "doubleTake" ? (o.lead ?? DOUBLE_LEAD) + takeLength(SURPRISE) : REACTION_FRAMES[kind];
+}
 const REALIZE = { antic: 5, anticDepth: 0.5, accent: "soft", pop: 4, settle: 8, settleLevel: 0.35, keep: 6, release: 8 };
 const TREMBLE = { antic: 5, anticDepth: 0.4, accent: "hard", hold: 10, settleLevel: 0.4 };
 /** A double take: a glance away and back (turns 3 frames apart), then the take. */
@@ -313,17 +342,48 @@ export const REACTION_FRAMES = {
     nod: 21,
     shake: 22,
 };
-/** A surprise pose from a take's value: squashed and squinting in the anticipation; tall, wide-eyed, hat up at the accent. */
-function surprisePose(frame, dt, v, pop, k, seed) {
+/**
+ * A loose part following a curve: a damped spring (about 0.55 rad a frame,
+ * damping 0.45) pulled toward the curve's value one frame late, stepped frame
+ * by frame from rest. It lags the body, carries past it, and settles: drag and
+ * follow-through. Pure: the same curve gives the same result at any frame.
+ */
+export function follow(curve, frame, o = {}) {
+    const w = o.w ?? 0.55, z = o.zeta ?? 0.45, d = o.delay ?? 1, from = o.from ?? Math.min(frame, 0) - 2;
+    let x = curve(from - d), v = 0;
+    for (let f = from + 1; f <= frame; f++) {
+        const target = curve(f - d);
+        v += w * w * (target - x) - 2 * z * w * v;
+        x += v;
+    }
+    return x;
+}
+/** A surprise pose from a take: squashed, sunk and squinting in the
+ * anticipation (the hat tipped down); tall, wide-eyed and lifted at the accent.
+ * The hat follows the body two frames late and overshoots it (drag and
+ * follow-through), and loose parts start to jiggle as the anticipation ends. */
+function surprisePose(frame, dt, o, k, seed) {
     const i = alive(frame, seed);
-    const sy = 1 + 0.2 * k * v;
-    const up = Math.max(0, v);
+    const c = takeCurve(dt, o);
+    const v = c.v, pop = c.pop;
+    const antic = Math.max(0, -v), up = Math.max(0, v);
+    const sy = (v < 0 ? 1 - 0.375 * k * antic : 1 + 0.2 * k * up) + 0.15 * k * c.smear;
+    const hat = follow((f) => takeCurve(f, o).v, dt);
+    const eyes = dt >= pop ? 1.1 + 0.15 * Math.exp(-(dt - pop) / 4) : c.smear ? 1.15 : 1;
     return {
-        y: -0.12 * k * up,
-        pose: { squashY: sy, squashX: keepVolume(sy), tilt: i.tilt - 9 * k * v, lift: 7 * k * up, blink: v < 0 ? Math.min(1, 1.5 * -v) : 0, jiggle: dt >= pop ? jiggle(dt - pop, k) : 0 },
+        y: v < 0 ? 0.1 * k * antic : -0.12 * k * up,
+        pose: {
+            squashY: sy,
+            squashX: keepVolume(sy) * (c.smear ? 0.9 : 1),
+            tilt: i.tilt - 9 * k * hat,
+            lift: hat >= 0 ? 7 * k * hat : 4 * k * hat,
+            blink: v < 0 ? Math.min(1, 1.5 * antic) : 0,
+            jiggle: dt >= pop - 2 ? jiggle(dt - (pop - 2), k) : 0,
+        },
         mouth: v > 0.3 ? "round" : undefined,
+        eyeScale: 1 + (eyes - 1) * Math.min(1, Math.max(0, v) / 0.45),
         // The pop and the held extreme, through the bounce-back's start: deliberate changes of speed.
-        contact: dt >= pop - 1 && dt <= pop + 3,
+        contact: dt >= pop - 2 && dt <= pop + 4,
         done: false,
     };
 }
@@ -345,18 +405,24 @@ export function react(frame, at, kind, o = {}) {
     const seed = o.seed ?? 0, k = o.strength ?? 1;
     const dt = frame - at;
     const i = alive(frame, seed);
-    const done = dt >= REACTION_FRAMES[kind];
+    const done = dt >= reactionFrames(kind, o);
     if (dt < 0 || done)
         return { y: 0, pose: i, contact: false, done };
-    if (kind === "surprise") {
-        const c = takeCurve(dt, SURPRISE);
-        return surprisePose(frame, dt, c.v, c.pop, k, seed);
-    }
+    if (kind === "surprise")
+        return surprisePose(frame, dt, SURPRISE, k, seed);
     if (kind === "doubleTake") {
-        if (dt < DOUBLE_LEAD)
-            return { y: 0, pose: i, lookX: dt < 3 ? -0.5 : 0.6, contact: false, done };
-        const c = takeCurve(dt - DOUBLE_LEAD, SURPRISE);
-        return { ...surprisePose(frame, dt - DOUBLE_LEAD, c.v, c.pop, k, seed), lookX: 0.6 };
+        // The first look (at the thing), then away as if nothing happened, with a
+        // blink, then the take with the eyes snapping back: each look a 3-frame
+        // saccade, each held long enough to read when there's a lead to hold it.
+        const L = o.lead ?? DOUBLE_LEAD;
+        const away = Math.round(L * 0.45);
+        const sac = (from, to, f0) => from + (to - from) * smooth((dt - f0) / 3);
+        if (dt < L) {
+            const look = dt < away ? sac(0, 0.6, 0) : sac(0.6, -0.3, away);
+            const bl = dt >= away && dt - away < BLINK.length ? BLINK[dt - away] : i.blink;
+            return { y: 0, pose: { ...i, blink: bl }, lookX: look, contact: false, done };
+        }
+        return { ...surprisePose(frame, dt - L, SURPRISE, k, seed), lookX: sac(-0.3, 0.6, L) };
     }
     if (kind === "realize") {
         const c = takeCurve(dt, REALIZE);
@@ -372,8 +438,9 @@ export function react(frame, at, kind, o = {}) {
         const c = takeCurve(dt, TREMBLE);
         // The moving hold: alternate the accent with a weaker pose every 2 frames while it's held.
         const holding = c.phase === "accent" && dt >= c.pop;
-        const v = holding && Math.floor((dt - c.pop) / 2) % 2 === 1 ? 0.82 : c.v;
-        const r = surprisePose(frame, dt, v, c.pop, 0.8 * k, seed);
+        const weak = holding && Math.floor((dt - c.pop) / 2) % 2 === 1;
+        const r0 = surprisePose(frame, dt, TREMBLE, 0.8 * k, seed);
+        const r = weak ? { ...r0, y: r0.y * 0.82, pose: { ...r0.pose, squashY: 1 + (r0.pose.squashY - 1) * 0.82 } } : r0;
         const side = holding ? (Math.floor((dt - c.pop) / 2) % 2 ? 1 : -1) : 0;
         return { ...r, pose: { ...r.pose, tilt: r.pose.tilt + 3 * side, jiggle: 2 * side }, mouth: c.v > 0.3 ? "open" : undefined, lookX: 0.2 * side };
     }
@@ -397,6 +464,15 @@ export function react(frame, at, kind, o = {}) {
     const s = Math.sin(dt * 0.95) * fade;
     return { y: 0, pose: { ...i, tilt: i.tilt + 9 * k * s, jiggle: 3 * s }, lookX: -0.7 * s, mouth: "closed", contact: false, done };
 }
+// ── Handoffs ──────────────────────────────────────────────────────────────
+/** Two poses mixed: w = 0 is `a`, 1 is `b` (every number interpolated, so a hand-off never jumps). */
+export function blendPose(a, b, w) {
+    const k = Math.min(1, Math.max(0, w));
+    const m = (x, y) => x + (y - x) * k;
+    return { squashX: m(a.squashX, b.squashX), squashY: m(a.squashY, b.squashY), tilt: m(a.tilt, b.tilt), lift: m(a.lift, b.lift), blink: m(a.blink, b.blink), jiggle: m(a.jiggle, b.jiggle) };
+}
+/** The weight of a hand-off at `frame` that starts at `at` and takes `frames` (smoothstep): 0 before, 1 after. */
+export const handoff = (frame, at, frames = 5) => smooth((frame - at) / frames);
 /**
  * A happy side-to-side waddle in place (a little dance, or a limbless walk):
  * the body rocks about its feet, pausing at each side (it's a pose, so it

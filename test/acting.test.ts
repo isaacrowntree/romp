@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alive, BLINK, blinks, gaze, hop, jump, keepVolume, react, REACTION_FRAMES, speechLength, syllables, takeCurve, takeLength, talk, talkPose, waddle } from "../src/core/index.js";
+import { alive, BLINK, blendPose, blinks, gaze, handoff, hop, jump, keepVolume, react, REACTION_FRAMES, reactionFrames, speechLength, syllables, takeCurve, takeLength, talk, talkPose, waddle } from "../src/core/index.js";
 
 describe("syllables", () => {
   it("counts English vowel groups, with a word-final silent e joining the one before", () => {
@@ -155,8 +155,9 @@ describe("takes", () => {
     expect(takeCurve(5).v).toBeLessThan(-0.3);
     expect(takeCurve(5).phase).toBe("antic");
     const { pop } = takeCurve(0);
-    expect(pop).toBe(7);
-    expect(takeCurve(pop - 1).v).toBeGreaterThan(1); // the smear: one stretched frame past the accent
+    expect(pop).toBe(8);
+    expect(takeCurve(pop - 2)).toMatchObject({ v: 0.5, smear: 1 }); // the in-between, smeared
+    expect(takeCurve(pop - 1).v).toBeGreaterThan(1); // past the accent
     expect(takeCurve(pop).v).toBe(1);
     expect(takeCurve(pop + 1).v).toBe(1); // held a couple of frames
   });
@@ -183,9 +184,9 @@ describe("reactions as takes", () => {
     expect(react(20, 0, "surprise").contact).toBe(false);
   });
   it("a double take glances away and back before the take", () => {
-    expect(react(1, 0, "doubleTake").lookX).toBeLessThan(0);
-    expect(react(4, 0, "doubleTake").lookX).toBeGreaterThan(0);
-    expect(react(6 + 7, 0, "doubleTake").y).toBeLessThan(0);
+    expect(react(2, 0, "doubleTake").lookX).toBeGreaterThan(0); // the first look, at it
+    expect(react(5, 0, "doubleTake").lookX).toBeLessThan(0.1); // away, as if nothing happened
+    expect(react(6 + 8, 0, "doubleTake").y).toBeLessThan(0); // the take
   });
   it("realize shuts the eyes in the dip, then opens them", () => {
     expect(react(4, 0, "realize").pose.blink).toBe(1);
@@ -222,10 +223,10 @@ describe("feel (0.11)", () => {
     expect(talk(-1 / 30, s, { lead: 0 }).open).toBe(0);
   });
   it("m, b and p shut the lips before their vowel", () => {
-    const s = syllables("ma");
+    const s = syllables("ma", { rate: 4 });
     expect(s[0].onset).toBe("m");
     expect(talk(s[0].t0 + 0.01, s, { lead: 0 }).mouth).toBe("closed");
-    expect(talk(s[0].t0 + 0.08, s, { lead: 0 }).mouth).not.toBe("closed");
+    expect(talk(s[0].t0 + 0.14, s, { lead: 0 }).mouth).not.toBe("closed");
   });
   it("pursuit glides the eyes after a moving thing instead of jumping", () => {
     const keys = [{ at: 0, x: -1, pursue: true }, { at: 30, x: 1 }];
@@ -245,5 +246,49 @@ describe("feel (0.11)", () => {
   it("a heavy jump squashes and stretches less than a light one", () => {
     const land = (weight: number) => Math.min(...Array.from({ length: 40 }, (_, f) => jump(f, 0, { weight }).pose.squashY));
     expect(land(1)).toBeGreaterThan(land(0));
+  });
+});
+
+describe("flow (0.12)", () => {
+  it("a take's pop passes through an in-between and an overshoot: never a jump straight to the pose", () => {
+    const vs = Array.from({ length: 12 }, (_, f) => takeCurve(f).v);
+    for (let f = 1; f < 12; f++) expect(Math.abs(vs[f] - vs[f - 1])).toBeLessThan(0.95);
+  });
+  it("surprise sinks in the anticipation, widens the eyes at the accent, and its hat lags the body", () => {
+    expect(react(5, 0, "surprise").y).toBeGreaterThan(0); // down first
+    expect(react(9, 0, "surprise").eyeScale).toBeGreaterThan(1.15);
+    // At the accent's first frame the body is up but the hat hasn't caught up yet; two frames later it has passed it.
+    const at = react(8, 0, "surprise").pose.lift, later = react(10, 0, "surprise").pose.lift;
+    expect(later).toBeGreaterThan(at);
+  });
+  it("mouths are held on twos and stay open between syllables of a word", () => {
+    const s = syllables("banana", { seed: 2 });
+    let flips = 0;
+    let prev = talk(0, s).mouth;
+    for (let f = 1; f < 30; f++) {
+      const m = talk(f / 30, s).mouth;
+      if (m !== prev) flips++;
+      prev = m;
+    }
+    expect(flips).toBeLessThan(8);
+    const mid = s[1]; // "a" after "n": the jaw doesn't shut between syllables
+    expect(talk(mid.t1 - 0.005, s, { lead: 0, onTwos: false }).open).toBeGreaterThan(0.3);
+  });
+  it("no gaze blink at the end of a pursuit, nor twice within 12 frames", () => {
+    const pursuit = [{ at: 0, x: -1, pursue: true }, { at: 20, x: 1 }];
+    for (let f = 18; f < 30; f++) expect(gaze(f, { keys: pursuit, wander: 0 }).blink).toBe(0);
+    const close = [{ at: 0, x: 1 }, { at: 6, x: -1 }];
+    for (let f = 10; f < 16; f++) expect(gaze(f, { keys: close, wander: 0 }).blink).toBe(0);
+  });
+  it("a double take's lead can be long enough to read", () => {
+    expect(reactionFrames("doubleTake", { lead: 24 })).toBe(reactionFrames("doubleTake") + 18);
+    expect(react(20, 0, "doubleTake", { lead: 24 }).y).toBe(0); // still looking away
+  });
+  it("blendPose hands one pose to another without a jump", () => {
+    const a = { squashX: 1, squashY: 1, tilt: 0, lift: 0, blink: 0, jiggle: 0 }, b = { squashX: 0.8, squashY: 1.2, tilt: 10, lift: 4, blink: 1, jiggle: 2 };
+    expect(blendPose(a, b, 0.5).tilt).toBe(5);
+    expect(handoff(9, 10)).toBe(0);
+    expect(handoff(15, 10)).toBe(1);
+    expect(handoff(12, 10)).toBeGreaterThan(0);
   });
 });
