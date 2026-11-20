@@ -74,15 +74,22 @@ export function landing(frame: number, land: number, seed = 0, strength = 1): Ch
 export function hop(frame: number, period = 16, height = 70, seed = 0): { y: number; pose: CharacterPose } {
   const t = ((((frame + seed * 3) % period) + period) % period) / period;
   const air = Math.sin(Math.PI * t);
-  const contact = t < 0.12 || t > 0.9;
+  // On the ground (|t| near 0) the body squashes and springs back smoothly;
+  // in the air it stretches with its speed (most leaving and arriving, round at
+  // the top). Width follows height, so the volume holds.
+  const d = Math.min(t, 1 - t);
+  const squash = d < 0.16 ? 0.18 * Math.cos((d / 0.16) * (Math.PI / 2)) ** 2 : 0;
+  const s = Math.min(1, Math.max(0, (d - 0.04) / 0.22));
+  const stretch = 0.1 * Math.abs(Math.cos(Math.PI * t)) * s * s * (3 - 2 * s);
+  const squashY = 1 - squash + stretch;
   return {
     y: -height * air,
     pose: {
-      squashY: contact ? 0.8 : 1 + 0.12 * air,
-      squashX: contact ? 1.18 : 1 - 0.07 * air,
+      squashY,
+      squashX: Math.pow(squashY, -0.7),
       tilt: -14 * Math.cos(TAU * (t - 0.18)),
       lift: 3 * air,
-      blink: contact ? 0.6 : blinkAt(frame, seed),
+      blink: d < 0.06 ? 0.6 : blinkAt(frame, seed),
       jiggle: jiggle(frame % period, 0.8),
     },
   };

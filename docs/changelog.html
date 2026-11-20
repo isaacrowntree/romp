@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.8.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.9.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -44,6 +44,22 @@
     <main id="main"><div class="shell">
 <section class="hero"><h1>Changelog</h1><p class="hero__lede">Every release, newest first. Versions follow SemVer.</p></section>
 <div class="prose changelog"><p>All notable changes to this project are documented here. Format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>; versions follow <a href="https://semver.org/">SemVer</a>.</p>
+<h2 id="0-9-0-2026-11-20">[0.9.0] — 2026-11-20</h2>
+<p>Characters that act. A review of a film's cast found them moving like animations, not characters: mouths flapping on a fixed beat whatever the words, eyes that slid or never moved, jumps with no crouch, every blink on the same metronome, and squash that changed the body's size. The rules animators use for each are now pure functions of the frame in romp/core.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong>Speech</strong>: <code>syllables(text, { rate, seed, fit, pause, gap })</code> turns words into timed syllables (English by vowel group, with a silent final e; Chinese, Japanese and Korean by character), with pauses after punctuation and stressed syllables a little longer. <code>talk(t, syllables)</code> gives the mouth at any moment (opening on each vowel's attack, round for o/u, wide for i, closed in pauses), <code>talkPose()</code> a body that nods on stresses.</li>
+<li><strong><code>babble(t, dur, out, { syllables })</code></strong> in romp/audio voices the given syllables (their times, vowel formants and stresses), so the voice says what the mouth shows. Without <code>syllables</code> it behaves as before.</li>
+<li><strong><code>gaze(frame, { keys })</code></strong>: saccades (a look in 3 frames, then a hold), small drifts while holding, a blink with a big change of look, and <code>head</code> following the eyes on a critically damped spring two frames behind.</li>
+<li><strong><code>jump(frame, at, { height, air, crouch })</code></strong>: anticipation crouch, a take-off stretched by its speed, a parabola that hangs round at the top, and <code>landing()</code> sized by the height; contacts marked for the motion check.</li>
+<li><strong><code>react(frame, at, kind)</code></strong>: <code>surprise</code> (a flinch, then a pop with a round mouth and the hat flying), <code>giggle</code>, <code>nod</code>, <code>shake</code> (eyes and head); <code>REACTION_FRAMES</code>.</li>
+<li><strong><code>alive(frame, seed)</code></strong>: idle with uneven breathing (in slower than out), a weight shift now and then, and <code>blinks()</code>: one every 2.2–4 s at a seeded moment, sometimes doubled. <code>keepVolume(squashY, k)</code>, <code>hash01()</code>.</li>
+<li>Docs: "Acting" in the guides; the API reference.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><code>hop()</code>: the contact squash eases in and out over several frames instead of switching on for two, the air stretch follows the speed, and the width keeps the volume.</li>
+</ul>
 <h2 id="0-8-0-2026-11-20">[0.8.0] — 2026-11-20</h2>
 <p>A timing analysis of a real 4K film made in code found most of the wall clock wasn't the check: it was full renders made only to look at the film (review sheets of one frame a second, each a full 4K render), full re-renders for one-scene fixes, and the soundtrack rendered again every round. This release adds the pipeline around a film: framework-free in <code>romp/pipeline</code>, with a thin Remotion binding in <code>romp/remotion/render</code> and CLI commands.</p>
 <h3 id="added">Added</h3>
@@ -198,6 +214,6 @@
 <li>Live demo page in <code>docs/</code> and a generated hero GIF.</li>
 </ul></div>
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.8.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.9.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>

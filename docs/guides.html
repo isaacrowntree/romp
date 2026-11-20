@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.8.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.9.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -101,6 +101,21 @@ const look = impactResponse(body, frame, seed);
 const last = body.impacts.filter((h) =&gt; h.frame &lt;= frame).at(-1);
 const parts = last ? jiggleParts(["brim", "crown", "pom"], frame - last.frame, last.speed / 900) : {};</code></pre>
 <p>Without physics, the same vocabulary is available as pure functions of the frame: <code>landing(frame, land)</code> (a scripted landing), <code>hop(frame, period, height)</code> (a hop cycle with squash on contact), <code>idle(frame)</code> (breathing and blinks), <code>blinkAt(frame, seed)</code>, <code>boing(dt)</code> (a decaying oscillation) and <code>rock(impacts, frame)</code> (a rigid prop rocking about its contact point). <code>ease</code>, <code>spring()</code>, <code>ringOut()</code> and <code>stagger()</code> are closed-form curves for everything that isn't simulated. Use a spring or <code>ease.out</code> for entrances, never a straight line.</p>
+
+<h2 id="acting">Acting: speech, eyes, jumps and reactions</h2>
+<p>Physics makes things land; acting makes a character look alive. <code>romp/core</code> has the small rules animators use, as pure functions of the frame:</p>
+<pre><code>import { syllables, talk, gaze, jump, react, alive } from "romp/core";
+
+const line = syllables("Square pings PEARL the moment you pay.", { fit: 2.4 }); // timed syllables
+const say = talk((frame - from) / fps, line);   // { open, mouth: "closed"|"open"|"wide"|"round", beat }
+const eyes = gaze(frame, { keys: [{ at: 0, x: 0.6 }, { at: 45, x: -0.4 }] }); // saccades, head follows
+const hop = jump(frame, 30, { height: 140 });    // crouch → stretch → hang → squash
+const wow = react(frame, 52, "surprise");        // flinch, pop, round mouth, settle
+const pose = alive(frame, seed);                 // uneven breathing, irregular blinks
+
+// The voice says the same syllables the mouth shows (romp/audio, cartoon):
+s.babble(t0, 2.4, voiceBus, { voice: "sunny", syllables: line });</code></pre>
+<p>What each one does, and why it reads as real: a <strong>saccade</strong> (eyes jump in about 0.1 s, then hold) instead of an eased slide; the <strong>head follows the eyes</strong> a beat later; a blink with a big change of look; <strong>anticipation</strong> before every action (a crouch before a jump, a flinch before a surprise); <strong>stretch with speed</strong> and a round, hanging apex; squash that <strong>keeps the volume</strong>; breathing that is slower in than out; and blinks at uneven gaps, sometimes doubled. A mouth opens on each vowel's attack, rounds for o and u, and shuts in pauses, so lip-sync comes from the words, not a flap on a beat.</p>
 
 <h2 id="play">Two ways to play: live or frame by frame</h2>
 <p>Write one <code>seek(t)</code> that draws film time <code>t</code>. Both modes call it.</p>
@@ -405,6 +420,6 @@ const report = await motionCanvasReport({ seek: (f) =&gt; player.playback.seek(f
 </div>
 
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.8.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.9.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>

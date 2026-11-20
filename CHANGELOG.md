@@ -3,6 +3,43 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.9.0] — 2026-11-20
+
+Characters that act. A review of a film's cast found them moving like
+animations, not characters: mouths flapping on a fixed beat whatever the words,
+eyes that slid or never moved, jumps with no crouch, every blink on the same
+metronome, and squash that changed the body's size. The rules animators use
+for each are now pure functions of the frame in romp/core.
+
+### Added
+- **Speech**: `syllables(text, { rate, seed, fit, pause, gap })` turns words
+  into timed syllables (English by vowel group, with a silent final e; Chinese,
+  Japanese and Korean by character), with pauses after punctuation and
+  stressed syllables a little longer. `talk(t, syllables)` gives the mouth at
+  any moment (opening on each vowel's attack, round for o/u, wide for i,
+  closed in pauses), `talkPose()` a body that nods on stresses.
+- **`babble(t, dur, out, { syllables })`** in romp/audio voices the given
+  syllables (their times, vowel formants and stresses), so the voice says what
+  the mouth shows. Without `syllables` it behaves as before.
+- **`gaze(frame, { keys })`**: saccades (a look in 3 frames, then a hold),
+  small drifts while holding, a blink with a big change of look, and `head`
+  following the eyes on a critically damped spring two frames behind.
+- **`jump(frame, at, { height, air, crouch })`**: anticipation crouch, a
+  take-off stretched by its speed, a parabola that hangs round at the top, and
+  `landing()` sized by the height; contacts marked for the motion check.
+- **`react(frame, at, kind)`**: `surprise` (a flinch, then a pop with a round
+  mouth and the hat flying), `giggle`, `nod`, `shake` (eyes and head);
+  `REACTION_FRAMES`.
+- **`alive(frame, seed)`**: idle with uneven breathing (in slower than out), a
+  weight shift now and then, and `blinks()`: one every 2.2–4 s at a seeded
+  moment, sometimes doubled. `keepVolume(squashY, k)`, `hash01()`.
+- Docs: "Acting" in the guides; the API reference.
+
+### Changed
+- `hop()`: the contact squash eases in and out over several frames instead of
+  switching on for two, the air stretch follows the speed, and the width keeps
+  the volume.
+
 ## [0.8.0] — 2026-11-20
 
 A timing analysis of a real 4K film made in code found most of the wall clock

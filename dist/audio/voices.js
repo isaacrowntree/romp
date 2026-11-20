@@ -96,10 +96,44 @@ export function cartoon(s) {
     };
     /** A character talking: syllables of gibberish for `dur` seconds. `voice` is a
      * VOICES key or your own { f0, swing, rate }. */
-    s.babble = (t, dur, out, { voice = "hero", vel = 0.11, seed = 1, pan = 0 } = {}) => {
+    s.babble = (t, dur, out, { voice = "hero", vel = 0.11, seed = 1, pan = 0, syllables } = {}) => {
         const V = typeof voice === "string" ? VOICES[voice] ?? VOICES.hero : voice;
         const r = rng(seed * 101 + Math.round(V.f0));
         const p = s.pan(pan, out);
+        if (syllables) {
+            // The given syllables (romp/core `syllables()`): their own times and
+            // vowels, so a mouth drawn from the same list moves with the voice.
+            const VI = { a: 0, e: 1, i: 2, o: 3, u: 4, m: 5 };
+            syllables.forEach((sy, i) => {
+                const at = t + sy.t0, len = sy.t1 - sy.t0;
+                if (sy.t0 >= dur)
+                    return;
+                const [f1, f2] = VOWELS[VI[sy.vowel] ?? 5];
+                const steps = [0, 2, 4, 7, 9, 12];
+                const st = steps[Math.floor(r() * (2 + V.swing * 4))] + (sy.stress ? 2 : 0);
+                const next = syllables[i + 1];
+                const end = !next || next.t0 - sy.t1 > 0.1 ? -3 : 1; // down before a pause
+                const f = V.f0 * 2 ** (st / 12);
+                const v = vel * (sy.vowel === "m" ? 0.5 : sy.stress ? 1.15 : 0.9);
+                const src = ctx.createOscillator();
+                src.type = "sawtooth";
+                src.frequency.setValueAtTime(f, at);
+                src.frequency.linearRampToValueAtTime(f * 2 ** (end / 12), at + len * 0.9);
+                const a = s.filter("bandpass", f1, 6), b = s.filter("bandpass", f2, 8);
+                const ga = s.gain(1), gb = s.gain(0.55);
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(0, at);
+                env.gain.linearRampToValueAtTime(v, at + 0.015);
+                env.gain.setValueAtTime(v, at + len * 0.6);
+                env.gain.linearRampToValueAtTime(0, at + len * 0.95);
+                src.connect(a).connect(ga).connect(env);
+                src.connect(b).connect(gb).connect(env);
+                env.connect(p);
+                src.start(at);
+                src.stop(at + len + 0.02);
+            });
+            return;
+        }
         let at = t;
         let i = 0;
         while (at < t + dur - 0.05) {

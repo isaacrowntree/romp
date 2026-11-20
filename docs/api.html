@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.8.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.9.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -96,6 +96,20 @@ hop(frame, period = 16, height = 70, seed?): { y, pose }
 idle(frame, seed?): CharacterPose          blinkAt(frame, seed?): 0..1
 boing(dt, freq?, decay?): number            nearImpact(impacts, frame, window = 2): boolean
 rock(impacts, frame, fps?, { hz?, zeta?, max?, dir? }): { angle, squash }</code></pre>
+<h3 data-export="syllables" id="syllables">syllables · talk · talkPose · speechLength</h3>
+<pre class="sig"><code>syllables(text, { rate = 8, seed?, fit?, pause = 0.16, gap = 0.03 }?): Syllable[]   // { t0, t1, vowel: "a"|"e"|"i"|"o"|"u"|"m", stress, text }
+talk(t, syllables): { open: 0..1, vowel, mouth: "closed"|"open"|"wide"|"round", talking, beat }
+talkPose(frame, t, syllables, seed?): CharacterPose &amp; { speech }      speechLength(syllables): seconds</code></pre>
+<p>Words as timed syllables (English by vowel group, Chinese, Japanese and Korean by character), and the mouth for each moment. Pass the same list to <code>babble(t, dur, out, { syllables })</code> and the voice says what the mouth shows.</p>
+<h3 data-export="gaze" id="gaze">gaze</h3>
+<pre class="sig"><code>gaze(frame, { keys?: { at, x, y? }[], seed?, wander = 0.18, saccade = 3, follow = 0.3, delay = 2 }?): { x, y, head, blink }</code></pre>
+<p>Eyes that jump to a look in a few frames and hold it (with small drifts), blink on a big change, and a head that follows a couple of frames behind.</p>
+<h3 data-export="jump" id="jump">jump · react · alive · blinks · keepVolume</h3>
+<pre class="sig"><code>jump(frame, at, { height = 120, air = 16, crouch = 5, seed? }?): { y, pose, contact, phase }
+react(frame, at, "surprise" | "giggle" | "nod" | "shake", { seed?, strength? }?): { y (share of height), pose, mouth?, lookX?, done }
+alive(frame, seed?): CharacterPose      blinks(frame, seed?): 0..1      keepVolume(squashY, k = 0.7): squashX
+REACTION_FRAMES: Record&lt;Reaction, number&gt;      hash01(a, b?): [0, 1)</code></pre>
+<p>A jump with its crouch, a speed-stretched parabola and a landing sized by the fall; reactions with their anticipations; idle that breathes unevenly and blinks irregularly; squash that keeps the body's volume.</p>
 <h3 data-export="ease" id="ease">ease · spring · ringOut · stagger · SPRING · lerp · span · clamp01</h3>
 <p>Closed-form curves: <code>ease.out</code>, <code>ease.in</code>, <code>ease.inOut</code>; <code>spring(elapsed, SPRING.smooth)</code>, <code>ringOut(elapsed, SPRING.bouncy)</code>, <code>stagger(t0, i, frames = 3, fps = 30)</code>.</p>
 <h3 data-export="Clock" id="Clock">Clock</h3>
@@ -337,6 +351,6 @@ romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16] [--cache .
 </div>
 
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.8.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.9.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>
