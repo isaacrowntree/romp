@@ -12,6 +12,28 @@
  * and `data-romp-chars-total` (else all of it is shown), `data-romp-words`,
  * `data-romp-heading`, and `data-romp-allow` ("offsafe,covers"). Each sample's
  * `z` is its document order (later draws on top), unless `data-romp-z` says.
+ * `data-romp-allow-crop` takes a share too ("0.1"). On a screen,
+ * `data-romp-native-width` and `data-romp-min-text-px`; on a text,
+ * `data-romp-anchor` (another tracked name) and `data-romp-ground` (a y in
+ * frame px).
+ *
+ * Only `[data-romp]` elements are seen: an untagged element, or a prop drawn
+ * inside one `<svg>` or `<canvas>`, is invisible to the check. Track each prop
+ * (an SVG child takes `data-romp` too); `untrackedOver()` finds the drawing
+ * surfaces you missed.
  */
 import type { Sample } from "./analyze.js";
 export declare function collectDom(root?: Element): Record<string, Sample>;
+/**
+ * Drawing surfaces the check can't see into: every `<svg>` (outermost),
+ * `<canvas>`, `<img>` and `<video>` under `root` that isn't tracked, holds
+ * nothing tracked, sits inside nothing tracked, comes after a shown tracked
+ * text in the document (so it's drawn over it, unless z-index says otherwise)
+ * and overlaps that text's box. Props drawn there can cross a title unseen:
+ * track them. `romp check --strict` warns about each one.
+ */
+export declare function untrackedOver(root: Element): {
+    what: string;
+    size: string;
+    text: string;
+}[];

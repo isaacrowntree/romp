@@ -9,8 +9,10 @@
  *               overhang only shrinks, or only grows) is fine
  *   covers      a text sits over the `focus` (the highlighted thing being talked
  *               about) for more than `coversSeconds` (0.1 s)
- *   overlap     two texts overlap, or a prop is drawn over a text (papers or dots
- *               over a title) for more than `overlapSeconds` (0.2 s)
+ *   overlap     two texts overlap for more than `overlapSeconds` (0.2 s), or a
+ *               prop is drawn over a text (papers, a vehicle, confetti crossing a
+ *               title) for more than `propOverlapSeconds` (two frames): a fast
+ *               prop over words is exactly what reads as a glitch
  *   unfinished  a text disappears, or its scene cuts, before every character is
  *               shown: a caption cut off mid-word
  *   unread      a text is whole for less than its reading time (`readingTime()`)
@@ -48,8 +50,10 @@ export interface TextOptions {
     coversSeconds?: number;
     /** overlap: the share of the smaller box two objects may share (default 0.02) */
     overlapFraction?: number;
-    /** overlap: how long (default 0.2 s) */
+    /** overlap: how long two texts may (default 0.2 s) */
     overlapSeconds?: number;
+    /** overlap: how long a prop may be drawn over a text (default 0.04 s: two frames in a row at 30 fps) */
+    propOverlapSeconds?: number;
     /** empty: how long a text's box may show no words (default 0.2 s) */
     emptySeconds?: number;
     /** empty: how long a heading may still be typing after it appears (default 0.5 s) */

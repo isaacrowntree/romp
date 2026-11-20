@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.5.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.6.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -205,6 +205,7 @@ drawParticles(ctx, particlesAt([burst, hits, flakes], frame));</code></pre>
     <tr><td>pop</td><td>Appears or vanishes in frame at 30% or more of its largest size, and opaque. It should grow, fade or fly in.</td></tr>
     <tr><td>strobe</td><td>Moves more than about 100&nbsp;px in one frame (scaled from an 886&nbsp;px-wide frame). At 30&nbsp;fps that reads as a jump.</td></tr>
     <tr><td>teleport</td><td>Jumps more than about 300&nbsp;px while visible on both frames.</td></tr>
+    <tr><td>jump</td><td>Moves more than about 40&nbsp;px in one frame while it sits still (or isn't there yet) two frames either side: a snap, not a move. Not at a scene cut.</td></tr>
     <tr><td>spike</td><td>Acceleration jumps far above its neighbours': a kink where two moves don't match speed.</td></tr>
     <tr><td>cropped</td><td>Shown and on screen, but more than 25% of its own box is outside the frame for more than 0.5&nbsp;s in a row: a character's head cut off by the edge. Entering or leaving (its on-frame share only rises, or only falls) is fine. Tune with <code>croppedFraction</code> and <code>croppedSeconds</code>.</td></tr>
     <tr><td>lost</td><td>Has been in frame, then leaves it entirely (still shown) and stays out for more than 1&nbsp;s: it bounced off the stage, fell out of the picture or wandered off. An entrance from off-frame is fine, and so is an object a moving camera leaves behind (three.js: where it last was in view is out of view too, so the camera moved on). Mark a real exit with <code>allowExit</code>; tune with <code>lostSeconds</code>.</td></tr>
@@ -234,16 +235,16 @@ const { issues } = motionReport({ seek, scene, camera, fps: 30, W: 886, H: 1920,
 romp check --audio &lt;file.wav&gt; [--json]
 romp check --lottie &lt;anim.json&gt; [--layers a,b] [--from s] [--to s] [--json]
 romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16]</code></pre>
-<p><code>romp check</code> bundles the entry with esbuild, plays it in headless Chromium with <code>@remotion/player</code> and seeks every frame. It exits 1 on any issue, motion, text or audio; <code>--strict</code> counts untagged objects as props for the overlap rule and runs the stale rule. <code>romp sound</code> bundles a module exporting <code>render(arg)</code> (an <code>AudioBuffer</code> or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.</p>
+<p><code>romp check</code> bundles the entry with esbuild, plays it in headless Chromium with <code>@remotion/player</code> and seeks every frame. It exits 1 on any issue, motion, text or audio; <code>--strict</code> counts untagged tracked objects as props for the overlap rule, runs the stale rule and warns about untracked drawing surfaces over a text. <code>romp sound</code> bundles a module exporting <code>render(arg)</code> (an <code>AudioBuffer</code> or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.</p>
 
 <h2 id="text">Text on screen: the text rules and timing</h2>
-<p>Captions typed into speech bubbles, headings over footage, a ring round the button being described: the check can't tell these from props unless you say what they are. Give a tracked object a <strong>role</strong> (<code>text</code>, <code>focus</code> or <code>prop</code>) and, for text, its words and how many characters are showing, and these rules run as well. They're on by default for anything with a role, so a film that tags nothing sees no change.</p>
+<p>Captions typed into speech bubbles, headings over footage, a ring round the button being described: the check can't tell these from props unless you say what they are. Give a tracked object a <strong>role</strong> (<code>text</code>, <code>focus</code>, <code>prop</code> or <code>screen</code>) and, for text, its words and how many characters are showing, and these rules run as well. They're on by default for anything with a role, so a film that tags nothing sees no change.</p>
 <table>
   <thead><tr><th>Issue</th><th>What it means</th></tr></thead>
   <tbody>
     <tr><td>offsafe</td><td>A legible text's box isn't inside the safe area for more than 0.1&nbsp;s. By default the long side keeps 5% at each end (a phone's notch, rounded corners and status bar) and the short side 3.5% at each edge: 38&nbsp;px left and right and 96&nbsp;px top and bottom at 1080×1920, the other way round at 1920×1080. Words must never touch the edge, unlike <code>cropped</code>'s 25% for props. Sliding in or out is fine. <code>safe</code> takes a share of each side, or margins in px.</td></tr>
     <tr><td>covers</td><td>A text sits over the <code>focus</code> box, the highlighted thing it's talking about, for more than 0.1&nbsp;s: a bubble covering the very button it describes.</td></tr>
-    <tr><td>overlap</td><td>Two texts overlap, or a prop is drawn over a text (papers piling over a title, dots falling through it) for more than 0.2&nbsp;s. A prop drawn under the text (a lower <code>z</code>; the DOM collector uses document order) is a backdrop.</td></tr>
+    <tr><td>overlap</td><td>Two texts overlap for more than 0.2&nbsp;s, or a prop is drawn over a text (papers piling over a title, dots falling through it) for two frames. A prop drawn under the text (a lower <code>z</code>; the DOM collector uses document order) is a backdrop.</td></tr>
     <tr><td>unfinished</td><td>A text disappears, or its scene cuts, before every character is shown: a caption cut off mid-word. Scene starts (<code>scenes</code>, seconds) and the start of every <code>covered</code> transition are cuts.</td></tr>
     <tr><td>unread</td><td>A text is whole for less than its reading time before it goes. <code>readingTime(text)</code>: 180 words a minute, never under 1.5&nbsp;s; tune with <code>reading: { wpm, min }</code>.</td></tr>
     <tr><td>empty</td><td>A bubble or heading box is visible with no words for more than 0.2&nbsp;s, or a heading is still typing 0.5&nbsp;s after it appears: the blank title between scenes. A heading should arrive whole with its scene.</td></tr>
@@ -251,6 +252,20 @@ romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16]</code></pr
   </tbody>
 </table>
 <p>Each rule's thresholds are options (<code>offsafeSeconds</code>, <code>coversFraction</code>, <code>coversSeconds</code>, <code>overlapFraction</code>, <code>overlapSeconds</code>, <code>emptySeconds</code>, <code>headingSeconds</code>, <code>reading</code>, <code>stale</code>), and each has an allow-list: <code>allow: { offsafe: ["credits"], covers: ["caption:*"] }</code> (a trailing <code>*</code> matches a prefix), or <code>allow</code> on the object.</p>
+<h3>Screens, props over words, and anchored bubbles</h3>
+<table>
+  <thead><tr><th>Issue</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td>legibility</td><td>A <code>screen</code> (a screenshot or screen recording of an app or a web page) is drawn so small its body text can't be read: its rendered width over its <code>native</code> width, times its body text (<code>minTextPx</code>, 16 native px), comes out under 20&nbsp;px on a 1080&nbsp;px short side (<code>legiblePx</code>, in proportion to the frame's short side) for more than 0.5&nbsp;s. A phone mock a third of a portrait frame wide fails; so does a whole 1440&nbsp;px page in a browser frame. Zooming is fine, and a screen zoomed or cropped to the part that matters passes. Track the element drawn at the content's full size, not a cropping window.</td></tr>
+    <tr><td>cropped</td><td>A <code>screen</code> or <code>focus</code> that would fit in the frame may have 1% outside it (<code>screenCroppedFraction</code>), not 25%: a phone 2% off the edge fails. One bigger than the frame is a zoom. Any object can take its own share: <code>allowCrop: 0.1</code>.</td></tr>
+    <tr><td>overlap</td><td>A prop drawn over a text is flagged after two frames (<code>propOverlapSeconds</code>): a fast prop crossing a title is exactly what reads as a glitch.</td></tr>
+    <tr><td>jump</td><td>Any tracked object moves more than ~40&nbsp;px (scaled from 886&nbsp;px wide; <code>jumpPx</code>) in one frame while still, or not yet there, two frames either side: a bubble that appears low and snaps up. Not at a scene cut, nor when it changes size that frame.</td></tr>
+    <tr><td>anchor</td><td>A text with a <code>ground</code> (y in frame px) shows any of its box below it; or a text with an <code>anchor</code> (the tracked object it belongs to) is more than <code>anchorPx</code> (10% of the short side) from it for over 0.1&nbsp;s.</td></tr>
+  </tbody>
+</table>
+<pre><code>&lt;Img src={shot} {...trackScreen("app", 390)} style={{ width: 640 }} /&gt;     // 390: the phone's CSS width
+&lt;div {...trackText(`bubble:${from}`, line, { typed, anchor: "guide", ground: 1500 })}&gt;…&lt;/div&gt;</code></pre>
+<p><strong>What the check can't see.</strong> Only <code>[data-romp]</code> elements are followed. An untagged element is invisible, even under <code>--strict</code>, and so is anything drawn inside one <code>&lt;svg&gt;</code> or <code>&lt;canvas&gt;</code>. Track each prop (SVG children take <code>data-romp</code> too). <code>romp check --strict</code> warns about every untracked <code>&lt;svg&gt;</code>, <code>&lt;canvas&gt;</code>, <code>&lt;img&gt;</code> or <code>&lt;video&gt;</code> drawn over a tracked text; <code>untrackedOver(root)</code> lists them for your own collector. The demo's “Plant a snap” box makes its caption type in low and jump up.</p>
 <h3>Timing that passes by construction</h3>
 <p><code>captionTiming(text, { cps: 30 })</code> types a caption at 30 characters a second, then holds it whole for its reading time: <code>{ typeFrames, holdFrames, totalFrames, typed(frame) }</code>. <code>timeline(scenes, { transition: 0.5, actSeconds: 1.2 })</code> lays out a film from its scenes: each lasts at least as long as its captions need, the transitions at both ends are added on, so a transition never lands on a caption's reading window, and an act card is 1.2&nbsp;s unless you say otherwise. It hands back the <code>covered</code> spans and scene cuts the check wants.</p>
 <pre><code>import { captionTiming, timeline, trackText, track, sceneSequence } from "romp/remotion";
@@ -326,6 +341,6 @@ const report = await motionCanvasReport({ seek: (f) =&gt; player.playback.seek(f
 </div>
 
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.5.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.6.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>

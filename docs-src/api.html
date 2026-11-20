@@ -63,27 +63,35 @@ clock.play(from?) · clock.pause() · clock.seek(t) · clock.t · clock.playing<
 <h2 id="check">romp/check</h2>
 <h3 data-export="analyze" id="analyze">analyze</h3>
 <pre class="sig"><code>analyze(frames: { f, row: Record&lt;name, Sample&gt; }[], { fps?, width?, height?, whips?, covered?, impacts?, seamless?,
-        croppedFraction?: 0.25, croppedSeconds?: 0.5, allowCrop?: string[], lostSeconds?: 1, allowExit?: string[], strobePx?, teleportPx?,
+        croppedFraction?: 0.25, croppedSeconds?: 0.5, allowCrop?: string[], lostSeconds?: 1, allowExit?: string[], strobePx?, teleportPx?, jumpPx?, screenCroppedFraction?: 0.01,
         // the text rules
         scenes?: seconds[], strict?: false, safe?: share | { top, right, bottom, left }, offsafeSeconds?: 0.1,
-        coversFraction?: 0.05, coversSeconds?: 0.1, overlapFraction?: 0.02, overlapSeconds?: 0.2,
+        coversFraction?: 0.05, coversSeconds?: 0.1, overlapFraction?: 0.02, overlapSeconds?: 0.2, propOverlapSeconds?: 0.04,
         emptySeconds?: 0.2, headingSeconds?: 0.5, reading?: { wpm?: 180, min?: 1.5 }, stale?: boolean | seconds,
-        allow?: { offsafe?, covers?, overlap?, unfinished?, unread?, empty?, stale?: string[] } }): Report
-Sample = { x, y, shown, onScreen, area, opacity, impact?, seamless?, box?: { x0, y0, x1, y1 }, allowCrop?, allowExit?,
-           role?: "text" | "focus" | "prop", chars?: { shown, total }, text?, words?, heading?, z?, allow?: kind[] }
-Report = { tracked, frames, issues: { frame, name, kind, detail }[] }
-kind = "pop" | "strobe" | "teleport" | "spike" | "cropped" | "lost"
-     | "offsafe" | "covers" | "overlap" | "unfinished" | "unread" | "empty" | "stale"</code></pre>
+        // screens and anchors
+        legiblePx?: 20 at a 1080 short side, minTextPx?: 16, legibleSeconds?: 0.5, anchorPx?: 10% of the short side, anchorSeconds?: 0.1, groundPx?: 2,
+        allow?: { offsafe?, covers?, overlap?, unfinished?, unread?, empty?, stale?, legibility?, anchor?: string[] } }): Report
+Sample = { x, y, shown, onScreen, area, opacity, impact?, seamless?, box?: { x0, y0, x1, y1 }, allowCrop?: boolean | share, allowExit?,
+           role?: "text" | "focus" | "prop" | "screen", chars?: { shown, total }, text?, words?, heading?, z?, allow?: kind[],
+           native?: { width }, minTextPx?, anchor?: name, ground?: y }
+Report = { tracked, frames, issues: { frame, name, kind, detail }[], warnings?: string[] }
+kind = "pop" | "strobe" | "teleport" | "jump" | "spike" | "cropped" | "lost"
+     | "offsafe" | "covers" | "overlap" | "unfinished" | "unread" | "empty" | "stale" | "legibility" | "anchor"</code></pre>
 <p>The cropped, lost and offsafe checks run when both <code>width</code> and <code>height</code> are given. The text rules see only samples with a <code>role</code> (under <code>strict</code>, untagged ones are props).</p>
-<h3 data-export="safeArea" id="safeArea">safeArea · boxOverlap</h3>
+<h3 data-export="safeArea" id="safeArea">safeArea · boxOverlap · boxGap</h3>
 <pre class="sig"><code>safeArea(W, H, safe?): { top, right, bottom, left }     // px; 5% of the long side at its ends, 3.5% of the short side
-boxOverlap(a, b): px²                                     // the area two boxes share</code></pre>
+boxOverlap(a, b): px²                                     // the area two boxes share
+boxGap(a, b): px                                          // the distance between two boxes (0 when they touch)</code></pre>
 <h3 data-export="inFrameShare" id="inFrameShare">inFrameShare</h3>
 <pre class="sig"><code>inFrameShare(box, W, H): 0..1     // the share of a box inside the frame</code></pre>
 <h3 data-export="formatReport" id="formatReport">formatReport</h3>
 <pre class="sig"><code>formatReport(report, fps = 30): string</code></pre>
 <h3 data-export="collectDom" id="collectDom">collectDom</h3>
 <pre class="sig"><code>collectDom(root = document.body): Record&lt;name, Sample&gt;     // every [data-romp] element, relative to root, with its box</code></pre>
+<p>Only <code>[data-romp]</code> elements: an untagged element, or a prop drawn inside one <code>&lt;svg&gt;</code> or <code>&lt;canvas&gt;</code>, is invisible to the check.</p>
+<h3 data-export="untrackedOver" id="untrackedOver">untrackedOver</h3>
+<pre class="sig"><code>untrackedOver(root): { what, size, text }[]     // untracked &lt;svg&gt;, &lt;canvas&gt;, &lt;img&gt;, &lt;video&gt; drawn over a tracked text</code></pre>
+<p>What <code>romp check --strict</code> warns about: a drawing surface that isn't tracked, holds nothing tracked, comes after a shown text in the document and overlaps it.</p>
 
 <h2 id="timing">romp/timing</h2>
 <h3 data-export="readingTime" id="readingTime">readingTime · wordCount</h3>
@@ -102,7 +110,10 @@ boxOverlap(a, b): px²                                     // the area two boxes
 
 <h2 id="remotion">romp/remotion</h2>
 <h3 data-export="track" id="track">track</h3>
-<pre class="sig"><code>track(name, { impact?, seamless?, allowCrop?, allowExit?, role?, allow?, z? }): { "data-romp", "data-romp-impact"?, …, "data-romp-role"? }</code></pre>
+<pre class="sig"><code>track(name, { impact?, seamless?, allowCrop?: boolean | share, allowExit?, role?, allow?, z?, anchor?, ground? }): { "data-romp", "data-romp-impact"?, …, "data-romp-role"? }</code></pre>
+<h3 data-export="trackScreen" id="trackScreen">trackScreen</h3>
+<pre class="sig"><code>trackScreen(name, nativeWidth, { minTextPx?, …track options }): { "data-romp", "data-romp-role": "screen", "data-romp-native-width", … }</code></pre>
+<p>A screenshot or screen recording for the legibility rule: the content's own width in CSS px (390 for a phone, 1440 for a desktop page). Put it on the element drawn at the content's full size.</p>
 <h3 data-export="trackText" id="trackText">trackText</h3>
 <pre class="sig"><code>trackText(name, text, { typed?, heading?, …track options }): { "data-romp", "data-romp-role": "text", "data-romp-text", "data-romp-chars-shown", "data-romp-chars-total", … }</code></pre>
 <p>Words on screen for the text rules: the whole text (<code>*highlight*</code> markers dropped) and how many characters are showing.</p>
@@ -111,7 +122,7 @@ boxOverlap(a, b): px²                                     // the area two boxes
 <h3 data-export="trackBurst" id="trackBurst">trackBurst</h3>
 <pre class="sig"><code>trackBurst(name, particles, { impact?, allowCrop?, allowExit? }): { "data-romp", …, style }</code></pre>
 <p>Props for an empty element covering a particle burst, centred where it comes from, at its strongest opacity: the motion check follows the burst as one object. Leave the particles themselves untracked.</p>
-<p>Also re-exports <code>collectDom</code>, <code>analyze</code>, <code>formatReport</code>, <code>captionTiming</code>, <code>captionAt</code>, <code>timeline</code> and <code>readingTime</code>. A <code>romp check</code> entry default-exports a <code>CheckEntry</code> (or a function of <code>--arg</code> returning one): <code>{ component, props?, durationInFrames, fps, width, height, …any analyze() option }</code>; spread a timeline's <code>check</code> into it.</p>
+<p>Also re-exports <code>collectDom</code>, <code>untrackedOver</code>, <code>analyze</code>, <code>formatReport</code>, <code>captionTiming</code>, <code>captionAt</code>, <code>timeline</code> and <code>readingTime</code>. A <code>romp check</code> entry default-exports a <code>CheckEntry</code> (or a function of <code>--arg</code> returning one): <code>{ component, props?, durationInFrames, fps, width, height, …any analyze() option }</code>; spread a timeline's <code>check</code> into it.</p>
 
 <h2 id="three">romp/three</h2>
 <h3 data-export="motionReport" id="motionReport">motionReport</h3>

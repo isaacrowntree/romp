@@ -151,7 +151,7 @@ export function textIssues(frames, names, o, fps, hidden) {
         // The checked range ends with it still on screen: what comes next is unknown, so no verdict.
     }
     // ── covers, overlap ─────────────────────────────────────────────────────────
-    const coversRun = run(o.coversSeconds ?? 0.1), overlapRun = run(o.overlapSeconds ?? 0.2);
+    const coversRun = run(o.coversSeconds ?? 0.1), overlapRun = run(o.overlapSeconds ?? 0.2), propRun = Math.max(1, run(o.propOverlapSeconds ?? 0.04));
     const coversFrac = o.coversFraction ?? 0.05, overlapFrac = o.overlapFraction ?? 0.02;
     const runs = new Map();
     for (let i = 0; i < frames.length; i++) {
@@ -196,7 +196,7 @@ export function textIssues(frames, names, o, fps, hidden) {
                         continue;
                     const share = shared / Math.max(1, Math.min(areaOf(tb), areaOf(qb)));
                     if (share > overlapFrac && !allowed("overlap", ts[a]) && !allowed("overlap", n))
-                        bump(`p|${ts[a]}|${n}`, "overlap", ts[a], overlapRun, () => `${n} is drawn over it (${Math.round(share * 100)}% of the smaller)`);
+                        bump(`p|${ts[a]}|${n}`, "overlap", ts[a], propRun, () => `${n} is drawn over it (${Math.round(share * 100)}% of the smaller)`);
                 }
             }
         }

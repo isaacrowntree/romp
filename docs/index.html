@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.5.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.6.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -44,7 +44,7 @@
     <main id="main"><div class="shell">
 <section class="hero">
   <h1>Physics-baked character motion and sound for videos made in&nbsp;code</h1>
-  <p class="hero__lede">Characters that fall, pile up or get knocked over are <strong>rigid bodies baked once at 240&nbsp;Hz</strong>, so every frame reads the same motion, live in a browser or rendered frame by frame. Each landing's speed sizes <strong>the squash on screen and the boing on the soundtrack</strong>. A <strong>motion check</strong> fails your build on pops, strobes, teleports, kinks, characters cropped by the edge and characters lost off it, and on <strong>words a viewer can't read</strong>: captions past the safe area, cut off mid-word or gone too soon, bubbles over the thing they describe, blank titles. The sound is <strong>synthesised</strong>: nothing to license, and the picture can react to it. <strong>Particles</strong> (confetti, sparks, snow) render frame by frame too.</p>
+  <p class="hero__lede">Characters that fall, pile up or get knocked over are <strong>rigid bodies baked once at 240&nbsp;Hz</strong>, so every frame reads the same motion, live in a browser or rendered frame by frame. Each landing's speed sizes <strong>the squash on screen and the boing on the soundtrack</strong>. A <strong>motion check</strong> fails your build on pops, strobes, teleports, kinks, characters cropped by the edge and characters lost off it, and on <strong>words a viewer can't read</strong>: captions past the safe area, cut off mid-word or gone too soon, bubbles over the thing they describe or snapping to their line, props crossing a title, blank titles, and app screenshots drawn too small to read. The sound is <strong>synthesised</strong>: nothing to license, and the picture can react to it. <strong>Particles</strong> (confetti, sparks, snow) render frame by frame too.</p>
   <div class="hero__actions">
     <a class="btn btn--primary" href="guides.html">Read the guides</a>
     <a class="btn btn--quiet" href="https://github.com/isaacrowntree/romp">Source on GitHub</a>
@@ -57,7 +57,7 @@
   <div id="romp-demo">
     <noscript><img src="hero.gif" alt="The romp wordmark drops onto a shelf, a small character knocks the p over in a spray of sparks and it springs back, then five hatted characters drop into a pile"></noscript>
   </div>
-  <p class="demo__note">Everything above is read from one simulation baked when the page loads. <strong>Play with sound</strong> runs it live on the audio clock (scrub, then play: the sound starts where you are). <strong>Render WAV offline</strong> renders the same schedule through an OfflineAudioContext. The sparks are a seeded emitter read by frame, and the shelf brightens on every kick drum, read from the soundtrack's score, not a live analyser. <strong>Run the motion check</strong> steps every frame of the real elements; tick <strong>Plant a bug</strong> to watch it catch a sticker that pops in at full size, or <strong>Plant a text bug</strong> to cut the caption off mid-word.</p>
+  <p class="demo__note">Everything above is read from one simulation baked when the page loads. <strong>Play with sound</strong> runs it live on the audio clock (scrub, then play: the sound starts where you are). <strong>Render WAV offline</strong> renders the same schedule through an OfflineAudioContext. The sparks are a seeded emitter read by frame, and the shelf brightens on every kick drum, read from the soundtrack's score, not a live analyser. <strong>Run the motion check</strong> steps every frame of the real elements; tick <strong>Plant a bug</strong> to watch it catch a sticker that pops in at full size, <strong>Plant a text bug</strong> to cut the caption off mid-word, or <strong>Plant a snap</strong> to make it type in low and jump up.</p>
 </section>
 
 <section class="prose">
@@ -100,9 +100,9 @@ const look = impactResponse(hero, frame);        // { squashX, squashY, tilt, li
 </section>
 
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.5.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.6.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
 <script type="module">
-  import { mount } from "./demo.js?v=1712827c";
+  import { mount } from "./demo.js?v=07c0d243";
   window.romp = mount(document.getElementById("romp-demo"));
 </script>
   </body>

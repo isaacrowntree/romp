@@ -21,7 +21,7 @@ romp encodes the fixes as a small library:
 - **Choreography says where and when; physics says how.** Anything that falls, piles, gets knocked or hops is a rigid body in a planck.js (Box2D) world, not an eased arc.
 - **Bake once, read every frame.** A scene is simulated once at a fixed 240 Hz and one pose per frame is stored. Reading a pose is a pure function of time, so the same motion plays in a live viewer, a frame-by-frame renderer, a scrubber and the motion check, identically.
 - **Impacts drive the picture and the sound.** Every landing is recorded with its speed. Squash, closed eyes, follow-through on hats and antennae, and the boing on the soundtrack all hang off the same impact.
-- **A motion check you can run in CI.** It steps every frame and flags **pops** (appears or vanishes at full size, opaque), **strobes** (more than ~100 px in one frame at 886 px wide), **teleports** (more than ~300 px), **spikes** (a kink in the motion), **lost** (a character that leaves the frame and stays out) and **crops** (more than a quarter of it outside the frame for more than half a second, other than while entering or leaving), with exemptions for real impacts, deliberate whips, covered frames, fades and objects you allow to crop.
+- **A motion check you can run in CI.** It steps every frame and flags **pops** (appears or vanishes at full size, opaque), **strobes** (more than ~100 px in one frame at 886 px wide), **teleports** (more than ~300 px), **jumps** (a one-frame snap between still frames), **spikes** (a kink in the motion), **lost** (a character that leaves the frame and stays out) and **crops** (more than a quarter of it outside the frame for more than half a second, other than while entering or leaving), with exemptions for real impacts, deliberate whips, covered frames, fades and objects you allow to crop.
 - **Words a viewer can read.** Track a caption, a speech bubble or a heading as text and the check also flags words outside the **safe area**, a bubble that **covers** the thing it's about, texts that **overlap** (or a prop drawn over a title), a caption **unfinished** when its scene cuts, one gone before it could be **read**, and an **empty** bubble or a heading still typing after its scene starts. `captionTiming()` and `timeline()` size scenes from their captions so a film passes by construction, and `romp check --audio` catches the soundtrack **dropping out** where pieces were joined.
 - **Sound that belongs to the picture.** Synthesised voices (marimba, bell, plucks, Rhodes, upright, kit, whooshes, plops, boings, gibberish character voices), a mix tuned for phone speakers, and one schedule function that plays live or renders offline. No samples, so there's nothing to license. The same schedule is also a **signal** the picture can react to (`listen()`: envelopes, beats, onsets), with no live analyser.
 - **Particles that render frame by frame.** Confetti, sparks, snow and fountains from a seeded emitter whose every particle is a pure function of the frame, so they work in Remotion (where real-time particle libraries can't).
@@ -200,19 +200,39 @@ const report = await motionCanvasReport({ seek: (f) => player.playback.seek(f), 
 
 ### Text on screen: the text rules and timing helpers
 
-Captions typed into speech bubbles, headings over footage, a ring round the button being described: the motion check can't tell these from props unless you say what they are. Give a tracked object a **role** (`text`, `focus` or `prop`) and, for text, its words and how many characters are showing, and these rules run as well:
+Captions typed into speech bubbles, headings over footage, a ring round the button being described: the motion check can't tell these from props unless you say what they are. Give a tracked object a **role** (`text`, `focus`, `prop` or `screen`) and, for text, its words and how many characters are showing, and these rules run as well:
 
 | Issue | What it means |
 |---|---|
 | `offsafe` | A legible text's box isn't inside the safe area for more than 0.1 s. The default safe area keeps 5% of the long side at each of its ends (notch, rounded corners, status bar) and 3.5% of the short side at each edge: 38 px left and right and 96 px top and bottom at 1080×1920, the other way round at 1920×1080. Words must never touch the edge, unlike `cropped`'s 25% for props; sliding in or out is fine. `safe` takes a share or margins in px. |
 | `covers` | A text sits over the `focus` box (the highlighted thing it's talking about) for more than 0.1 s: a bubble covering the very button it describes. |
-| `overlap` | Two texts overlap, or a prop is drawn over a text (papers piling over a title, dots falling through it) for more than 0.2 s. A prop drawn *under* the text (lower `z`: the collector uses document order) is a backdrop, not an overlap. |
+| `overlap` | Two texts overlap for more than 0.2 s, or a prop is drawn over a text (papers piling over a title, dots falling through it) for two frames. A prop drawn *under* the text (lower `z`: the collector uses document order) is a backdrop, not an overlap. |
 | `unfinished` | A text disappears, or its scene cuts (`scenes`, or the start of a `covered` transition), before every character is shown: a caption cut off mid-word. |
 | `unread` | A text is whole for less than its reading time (`readingTime()`: 180 words a minute, never under 1.5 s) before it goes. |
 | `empty` | A bubble or heading box shows with no words for more than 0.2 s, or a heading (`heading: true`) is still typing 0.5 s after it appears: the blank title between scenes. A heading should arrive whole with its scene. |
 | `stale` | (with `--strict`, or `stale: true`) Nothing tracked changes for more than 3 s after every text on screen was read. |
 
 Every rule has its thresholds as options and an allow-list: `allow: { offsafe: ["credits"], covers: ["caption:*"] }` (a trailing `*` matches a prefix), or `allow` on the object (`track(name, { allow: ["covers"] })`, `data-romp-allow="covers"`). **The rules are on by default for anything with a role**, so a film that tags nothing sees no change. `--strict` (or `strict: true`) goes further: every untagged tracked object counts as a prop for `overlap`, and `stale` runs.
+
+### Screens, props over words, and anchored bubbles
+
+Three more kinds of fault that a check of tracked boxes only catches if it knows what they are:
+
+| Issue | What it means |
+|---|---|
+| `legibility` | A `screen` (a screenshot or screen recording of an app or a web page) is drawn so small that its body text can't be read: its rendered width over its `native` width, times its body text (`minTextPx`, 16 native px), comes out under 20 px on a 1080 px short side (`legiblePx`, in proportion to the frame's short side) for more than 0.5 s. A phone mock a third of a portrait frame wide (390 → 360 px: 14.8 px text) fails; so does a whole 1440 px page in a browser frame. Zooming in or out is fine, and a screen zoomed or cropped to the part that matters passes. Track the element drawn at the content's full size (the image, not a cropping window). |
+| `cropped` | For a `screen` or `focus` that would fit in the frame, the tolerance is 1% (`screenCroppedFraction`), not 25%: a phone 2% off the right edge fails. One bigger than the frame is a zoom and passes. Any object can take its own share: `allowCrop: 0.1`. |
+| `overlap` | A prop drawn over a text is flagged after two frames (`propOverlapSeconds`, 0.04 s), not 0.2 s: a fast prop crossing a title (a vehicle, papers, confetti) is exactly what reads as a glitch. Two texts still get 0.2 s. |
+| `jump` | Any tracked object moves more than ~40 px (scaled from 886 px wide; `jumpPx`) in one frame while it sits still, or isn't there yet, for two frames either side: a bubble that appears 60 px low and snaps up to its place. Under the strobe limit, so it used to pass. Not at a scene cut (`scenes`), and not when its size changes in that frame. |
+| `anchor` | A text with a `ground` (a y in frame px) shows any of its box below that line (entering under the ground and jumping up, or sliding under it to leave); or a text with an `anchor` (the tracked object it belongs to, its speaker) is more than `anchorPx` (10% of the short side) from it for more than 0.1 s. |
+
+```tsx
+import { trackScreen, trackText } from "romp/remotion";
+<Img src={shot} {...trackScreen("app", 390)} style={{ width: 640 }} />           // 390: the phone's CSS width
+<div {...trackText(`bubble:${from}`, line, { typed, anchor: "guide", ground: 1500 })}>…</div>
+```
+
+**What the check can't see.** It only follows `[data-romp]` elements. An untagged element is invisible, even under `--strict` (which counts untagged *tracked* objects as props), and so is anything drawn inside one `<svg>` or `<canvas>`: papers flying across a title inside a full-frame SVG pass unseen. Track each prop (SVG children take `data-romp` too). `romp check --strict` warns about every untracked `<svg>`, `<canvas>`, `<img>` or `<video>` drawn over a tracked text (after it in the document), and `untrackedOver(root)` from `romp/check` lists them for your own collector.
 
 **Remotion:** time captions with `captionTiming`, lay scenes out with `timeline`, and track the words.
 

@@ -7,6 +7,9 @@
  *   strobe    moves more than ~100 px (at 886 px wide) in one frame: reads as a
  *             jump, not motion, at 30 fps. Slow it, or blur it
  *   teleport  visible on both frames and jumped more than ~300 px
+ *   jump      moved more than ~40 px in one frame while it sat still (or wasn't
+ *             there) for two frames either side: a snap, not a move (a bubble
+ *             appearing below its line and jumping up to it). Not at a cut
  *   spike     acceleration jumps far above its neighbours': a kink in the curve
  *             (a missing ease, two moves handed off at different speeds)
  *   lost      has been in frame, then leaves it entirely (still shown) and
@@ -17,7 +20,17 @@
  *             (0.5 s) in a row: a character's head cut off by the edge. Runs
  *             where it's entering or leaving (its on-frame share only rises or
  *             only falls) are fine; needs the collector's `box` and the
- *             frame's `width` and `height`
+ *             frame's `width` and `height`. A `screen` or `focus` that would
+ *             fit in the frame must be wholly in it (`screenCroppedFraction`,
+ *             1%); one bigger than the frame is a zoom and passes. A sample's
+ *             numeric `allowCrop` is its own share
+ *   anchor    a text with an `anchor` (another tracked object, its speaker) is
+ *             more than `anchorPx` from it, or one with a `ground` (a y in frame
+ *             px) shows any of its box below that line
+ *   legibility a `screen` (a screenshot or recording of an app or page, with its
+ *             `native` width) is drawn so small its body text (`minTextPx`, 16
+ *             native px) renders under `legiblePx` (20 px on a 1080 short side)
+ *             for more than `legibleSeconds` (0.5 s). Zooming in is fine
  *
  * Exempt: frames inside `whips` (deliberate fast moves) skip speed checks;
  * frames inside `covered` (something fills the frame, or a transition hides the
@@ -29,15 +42,16 @@
  * Text rules (text.ts) run over samples that carry a `role`: words a viewer has
  * to read (`text`), the thing being talked about (`focus`) and everything else
  * that moves (`prop`): offsafe, covers, overlap, unfinished, unread, empty and
- * (opt-in) stale.
+ * (opt-in) stale. Screens and anchors are in screen.ts.
  *
  * It only reads positions, so it works for anything you can seek: a realtime
  * page's seek(t), a frame renderer, three.js or the DOM (see collectDom and
  * romp/three).
  */
 import { type TextOptions } from "./text.js";
+import { type ScreenOptions } from "./screen.js";
 /** What a tracked object is, for the text rules. */
-export type Role = "text" | "focus" | "prop";
+export type Role = "text" | "focus" | "prop" | "screen";
 export interface Sample {
     /** on-screen centre, px */
     x: number;
@@ -59,8 +73,8 @@ export interface Sample {
         x1: number;
         y1: number;
     };
-    /** never flag as cropped */
-    allowCrop?: boolean;
+    /** never flag as cropped (true), or the share of its box allowed outside the frame */
+    allowCrop?: boolean | number;
     /** may leave the frame for good (never flag as lost) */
     allowExit?: boolean;
     /** with a camera (three.js): its latest on-screen move was mostly the camera's,
@@ -84,10 +98,21 @@ export interface Sample {
     z?: number;
     /** text rules this object may break on purpose */
     allow?: TextKind[];
+    /** screen: the content's own size (CSS px of the phone or page it shows: 390 for a phone, 1440 for a desktop page) */
+    native?: {
+        width: number;
+        height?: number;
+    };
+    /** screen: its body text in native px (default 16) */
+    minTextPx?: number;
+    /** text: the tracked object it belongs to (a speaker); it must stay within `anchorPx` of it */
+    anchor?: string;
+    /** text: a ground line, y in frame px; no part of it may show below */
+    ground?: number;
 }
 /** The text rules. */
-export type TextKind = "offsafe" | "covers" | "overlap" | "unfinished" | "unread" | "empty" | "stale";
-export type IssueKind = "pop" | "strobe" | "teleport" | "spike" | "cropped" | "lost" | TextKind;
+export type TextKind = "offsafe" | "covers" | "overlap" | "unfinished" | "unread" | "empty" | "stale" | "legibility" | "anchor";
+export type IssueKind = "pop" | "strobe" | "teleport" | "jump" | "spike" | "cropped" | "lost" | TextKind;
 export interface FrameRow {
     f: number;
     row: Record<string, Sample>;
@@ -98,7 +123,7 @@ export interface Issue {
     kind: IssueKind;
     detail: string;
 }
-export interface AnalyzeOptions extends TextOptions {
+export interface AnalyzeOptions extends TextOptions, ScreenOptions {
     fps?: number;
     /** frame width in px: thresholds scale from 886 px unless given */
     width?: number;
@@ -106,6 +131,8 @@ export interface AnalyzeOptions extends TextOptions {
     height?: number;
     /** cropped: the share of an object's box allowed outside the frame (default 0.25) */
     croppedFraction?: number;
+    /** cropped: the share a `screen` or `focus` that fits in the frame may have outside it (default 0.01) */
+    screenCroppedFraction?: number;
     /** cropped: how long it may stay over that before it's flagged (default 0.5 s) */
     croppedSeconds?: number;
     /** names never checked for cropping */
@@ -124,11 +151,15 @@ export interface AnalyzeOptions extends TextOptions {
     seamless?: string[];
     strobePx?: number;
     teleportPx?: number;
+    /** jump: a one-frame move between still frames bigger than this (default ~40 px at 886 wide) */
+    jumpPx?: number;
 }
 export interface Report {
     tracked: string[];
     frames: number;
     issues: Issue[];
+    /** things the check can't see (untracked drawing surfaces over a text, under --strict) */
+    warnings?: string[];
 }
 export declare function analyze(frames: FrameRow[], o?: AnalyzeOptions): Report;
 /** The share of a box inside a W×H frame (0..1). */

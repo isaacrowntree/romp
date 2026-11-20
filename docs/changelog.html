@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.5.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.6.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -44,6 +44,30 @@
     <main id="main"><div class="shell">
 <section class="hero"><h1>Changelog</h1><p class="hero__lede">Every release, newest first. Versions follow SemVer.</p></section>
 <div class="prose changelog"><p>All notable changes to this project are documented here. Format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>; versions follow <a href="https://semver.org/">SemVer</a>.</p>
+<h2 id="0-6-0-2026-11-20">[0.6.0] — 2026-11-20</h2>
+<p>A film passed <code>romp check --strict</code> on 0.5.0 with faults a viewer saw at once: an app screenshot drawn too small to read, a vehicle and papers crossing a title, a phone mock 2% off the frame's edge, and a speech bubble that appeared below its ground line and snapped up to it. Why each got through, and what catches it now:</p>
+<ul>
+<li>No rule knew what a screenshot was, or how big its text came out.</li>
+<li>The props were untracked, or drawn inside one SVG: the check only follows <code>[data-romp]</code> elements, and <code>--strict</code> only counts untagged *tracked* objects. The tracked ones crossed the title in under the 0.2 s overlap limit.</li>
+<li><code>cropped</code> allowed any object 25% outside the frame.</li>
+<li>A 60 px move in one frame is under the strobe limit (~120 px at 1080 wide), and the spike rule needs motion on both sides, so a snap at a scene start passed.</li>
+</ul>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong><code>legibility</code></strong>: a new <code>screen</code> role for a screenshot or screen recording, with its content's <code>native</code> width (390 for a phone, 1440 for a desktop page) and an optional <code>minTextPx</code> (16). Flags a screen whose body text renders under <code>legiblePx</code> (20 px on a 1080 px short side, in proportion) for more than <code>legibleSeconds</code> (0.5 s). Zooming is fine; a zoomed or cropped screen passes. <code>trackScreen(name, nativeWidth)</code> in romp/remotion, <code>data-romp-native-width</code> and <code>data-romp-min-text-px</code> in the DOM.</li>
+<li><strong><code>jump</code></strong>: a move over ~40 px (scaled from 886 px wide; <code>jumpPx</code>) in one frame between still frames, two either side. Not at a scene cut, not when the object changes size that frame.</li>
+<li><strong><code>anchor</code></strong>: a text with a <code>ground</code> (a y in frame px) that shows below it, or with an <code>anchor</code> (its speaker's tracked name) that drifts more than <code>anchorPx</code> (10% of the short side) from it. <code>data-romp-anchor</code>, <code>data-romp-ground</code>; <code>boxGap()</code>.</li>
+<li><strong><code>romp check --strict</code> warnings</strong> about untracked <code>&lt;svg&gt;</code>, <code>&lt;canvas&gt;</code>, <code>&lt;img&gt;</code> and <code>&lt;video&gt;</code> drawn over a tracked text, which the check can't see into. <code>untrackedOver(root)</code> lists them; <code>Report.warnings</code> carries them.</li>
+<li>A sample's <code>allowCrop</code> can be a share (<code>allowCrop: 0.1</code>, <code>data-romp-allow-crop="0.1"</code>).</li>
+<li>Demo: "Plant a snap" makes the caption type in low and jump up.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><code>cropped</code>: a <code>screen</code> or <code>focus</code> that would fit in the frame may have 1% outside it (<code>screenCroppedFraction</code>), not 25%. One bigger than the frame is a zoom and isn't checked.</li>
+<li><code>overlap</code>: a prop drawn over a text is flagged after two frames in a row (<code>propOverlapSeconds</code>, 0.04 s), not 0.2 s. Two texts still get 0.2 s.</li>
+<li>Speed checks (strobe, teleport, jump) skip frames at a declared scene cut.</li>
+<li>Docs: what the check can't see (untagged elements, props inside one SVG or canvas) and how to track them.</li>
+</ul>
 <h2 id="0-5-0-2026-11-20">[0.5.0] — 2026-11-20</h2>
 <p>Words on screen and the soundtrack get checked too. A frame-by-frame review of a real portrait film turned up faults the motion check couldn't see: captions cut off mid-word when their scene ended, lines whole for barely a second, a speech bubble covering the very button it described, bubbles running off the edge, papers and dots crossing a title, empty bubbles, titles that sat blank under their underline while they retyped after every cut, and the music dropping out for half a second at segment joins. Each of those is now a rule, and the timing helpers make the right lengths the default.</p>
 <h3 id="added">Added</h3>
@@ -133,6 +157,6 @@
 <li>Live demo page in <code>docs/</code> and a generated hero GIF.</li>
 </ul></div>
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.5.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.6.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>

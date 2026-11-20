@@ -6,7 +6,7 @@
  *
  * Run the check with the CLI: `romp check src/check-entry.tsx --public public`.
  */
-export { collectDom } from "../check/dom.js";
+export { collectDom, untrackedOver } from "../check/dom.js";
 export { analyze, formatReport } from "../check/analyze.js";
 export { captionTiming, captionAt, readingTime, timeline } from "../timing/index.js";
 import { particleSample } from "../particles/index.js";
@@ -16,11 +16,29 @@ export function track(name, o = {}) {
         "data-romp": name,
         "data-romp-impact": o.impact ? "1" : undefined,
         "data-romp-seamless": o.seamless ? "1" : undefined,
-        "data-romp-allow-crop": o.allowCrop ? "1" : undefined,
+        "data-romp-allow-crop": o.allowCrop === true ? "1" : typeof o.allowCrop === "number" ? String(o.allowCrop) : undefined,
         "data-romp-allow-exit": o.allowExit ? "1" : undefined,
         "data-romp-role": o.role,
         "data-romp-allow": o.allow?.length ? o.allow.join(",") : undefined,
         "data-romp-z": o.z != null ? String(o.z) : undefined,
+        "data-romp-anchor": o.anchor,
+        "data-romp-ground": o.ground != null ? String(o.ground) : undefined,
+    };
+}
+/**
+ * Track a screenshot or screen recording of an app or a web page for the
+ * legibility rule: `native` is the content's own width in CSS px (390 for a
+ * phone, 1440 for a desktop page), `minTextPx` its body text (default 16).
+ * Put it on the element drawn at the content's full size (the image, not a
+ * cropping window). A screen that fits in the frame must be wholly in it.
+ *
+ *   <Img src={shot} {...trackScreen("app", 390)} style={{ width: 640 }} />
+ */
+export function trackScreen(name, native, o = {}) {
+    return {
+        ...track(name, { ...o, role: "screen" }),
+        "data-romp-native-width": String(native),
+        "data-romp-min-text-px": o.minTextPx != null ? String(o.minTextPx) : undefined,
     };
 }
 /**

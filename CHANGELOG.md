@@ -3,6 +3,55 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.6.0] — 2026-11-20
+
+A film passed `romp check --strict` on 0.5.0 with faults a viewer saw at once:
+an app screenshot drawn too small to read, a vehicle and papers crossing a
+title, a phone mock 2% off the frame's edge, and a speech bubble that appeared
+below its ground line and snapped up to it. Why each got through, and what
+catches it now:
+
+- No rule knew what a screenshot was, or how big its text came out.
+- The props were untracked, or drawn inside one SVG: the check only follows
+  `[data-romp]` elements, and `--strict` only counts untagged *tracked*
+  objects. The tracked ones crossed the title in under the 0.2 s overlap limit.
+- `cropped` allowed any object 25% outside the frame.
+- A 60 px move in one frame is under the strobe limit (~120 px at 1080 wide),
+  and the spike rule needs motion on both sides, so a snap at a scene start
+  passed.
+
+### Added
+- **`legibility`**: a new `screen` role for a screenshot or screen recording,
+  with its content's `native` width (390 for a phone, 1440 for a desktop page)
+  and an optional `minTextPx` (16). Flags a screen whose body text renders
+  under `legiblePx` (20 px on a 1080 px short side, in proportion) for more
+  than `legibleSeconds` (0.5 s). Zooming is fine; a zoomed or cropped screen
+  passes. `trackScreen(name, nativeWidth)` in romp/remotion,
+  `data-romp-native-width` and `data-romp-min-text-px` in the DOM.
+- **`jump`**: a move over ~40 px (scaled from 886 px wide; `jumpPx`) in one
+  frame between still frames, two either side. Not at a scene cut, not when
+  the object changes size that frame.
+- **`anchor`**: a text with a `ground` (a y in frame px) that shows below it,
+  or with an `anchor` (its speaker's tracked name) that drifts more than
+  `anchorPx` (10% of the short side) from it. `data-romp-anchor`,
+  `data-romp-ground`; `boxGap()`.
+- **`romp check --strict` warnings** about untracked `<svg>`, `<canvas>`,
+  `<img>` and `<video>` drawn over a tracked text, which the check can't see
+  into. `untrackedOver(root)` lists them; `Report.warnings` carries them.
+- A sample's `allowCrop` can be a share (`allowCrop: 0.1`,
+  `data-romp-allow-crop="0.1"`).
+- Demo: "Plant a snap" makes the caption type in low and jump up.
+
+### Changed
+- `cropped`: a `screen` or `focus` that would fit in the frame may have 1%
+  outside it (`screenCroppedFraction`), not 25%. One bigger than the frame
+  is a zoom and isn't checked.
+- `overlap`: a prop drawn over a text is flagged after two frames in a row
+  (`propOverlapSeconds`, 0.04 s), not 0.2 s. Two texts still get 0.2 s.
+- Speed checks (strobe, teleport, jump) skip frames at a declared scene cut.
+- Docs: what the check can't see (untagged elements, props inside one SVG or
+  canvas) and how to track them.
+
 ## [0.5.0] — 2026-11-20
 
 Words on screen and the soundtrack get checked too. A frame-by-frame review of a

@@ -4,8 +4,9 @@
 //     Plays a Remotion composition frame by frame in headless Chromium
 //     (@remotion/player), collects every [data-romp] element per frame and runs
 //     the motion check, with the text rules for elements tracked with a role.
-//     --strict also counts untagged elements as props (overlap) and runs the
-//     stale rule. Exit 1 when it finds issues. The entry default-exports
+//     --strict also counts untagged tracked elements as props (overlap), runs
+//     the stale rule and warns about untracked <svg>, <canvas>, <img> and <video>
+//     drawn over a text (the check can't see inside them). Exit 1 on issues. The entry default-exports
 //     { component, props?, durationInFrames, fps, width, height, whips?, covered?,
 //       …any analyze() option }.
 //   romp check --audio <file.wav>
@@ -155,7 +156,7 @@ window.__rompRun = async (from, to) => {
     `import { createElement, createRef } from "react";
 import { createRoot } from "react-dom/client";
 import { Player } from "@remotion/player";
-import { collectDom } from ${JSON.stringify(path.join(dist, "check/dom.js"))};
+import { collectDom, untrackedOver } from ${JSON.stringify(path.join(dist, "check/dom.js"))};
 import { analyze } from ${JSON.stringify(path.join(dist, "check/analyze.js"))};
 import E0 from ${JSON.stringify(entry)};
 // The entry is the config, or a function of --arg (one entry for several cuts).
@@ -170,9 +171,16 @@ window.__rompRun = async (from, to) => {
   while (!ref.current) await raf();
   await document.fonts.ready;
   const frames = [];
-  for (let f = from; f <= to; f++) { ref.current.seekTo(f); await raf(); frames.push({ f, row: collectDom(root) }); }
+  const strict = ${strict} || !!E.strict;
+  const unseen = new Map();
+  for (let f = from; f <= to; f++) {
+    ref.current.seekTo(f); await raf(); frames.push({ f, row: collectDom(root) });
+    if (strict) for (const u of untrackedOver(root)) if (!unseen.has(u.what)) unseen.set(u.what, { ...u, f });
+  }
   const { component, props, durationInFrames, ...opts } = E;
-  return analyze(frames, { ...opts, fps: E.fps, width: E.width, height: E.height, strict: ${strict} || !!E.strict });
+  const report = analyze(frames, { ...opts, fps: E.fps, width: E.width, height: E.height, strict });
+  if (unseen.size) report.warnings = [...unseen.values()].map((u) => "untracked " + u.what + " (" + u.size + ") is drawn over the text " + u.text + " at frame " + u.f + ": romp can't see what's in it. Track its props (data-romp works on SVG children too)");
+  return report;
 };`,
     "check",
   );

@@ -6,7 +6,7 @@
  *
  * Run the check with the CLI: `romp check src/check-entry.tsx --public public`.
  */
-export { collectDom } from "../check/dom.js";
+export { collectDom, untrackedOver } from "../check/dom.js";
 export { analyze, formatReport, type Report, type Issue, type Sample, type FrameRow } from "../check/analyze.js";
 export { captionTiming, captionAt, readingTime, timeline, type Timeline, type SceneSpec, type PlacedCaption } from "../timing/index.js";
 import type { AnalyzeOptions, Role, TextKind } from "../check/analyze.js";
@@ -15,17 +15,34 @@ import { type Particle } from "../particles/index.js";
 export interface TrackOptions {
     impact?: boolean;
     seamless?: boolean;
-    allowCrop?: boolean;
+    /** never flag as cropped (true), or the share of its box allowed outside the frame */
+    allowCrop?: boolean | number;
     allowExit?: boolean;
-    /** for the text rules: words to read, the highlighted thing being talked about, or a prop */
+    /** for the text rules: words to read, the highlighted thing being talked about, a prop, or a screenshot or screen recording */
     role?: Role;
     /** text rules it may break on purpose */
     allow?: TextKind[];
     /** paint order, when CSS z-index puts it above or below its place in the document */
     z?: number;
+    /** text: the tracked object it belongs to (a speech bubble's speaker) */
+    anchor?: string;
+    /** text: a ground line (y in frame px) no part of it may show below */
+    ground?: number;
 }
 /** Data attributes for the motion check: spread them on the element to track. */
 export declare function track(name: string, o?: TrackOptions): Record<string, string | undefined>;
+/**
+ * Track a screenshot or screen recording of an app or a web page for the
+ * legibility rule: `native` is the content's own width in CSS px (390 for a
+ * phone, 1440 for a desktop page), `minTextPx` its body text (default 16).
+ * Put it on the element drawn at the content's full size (the image, not a
+ * cropping window). A screen that fits in the frame must be wholly in it.
+ *
+ *   <Img src={shot} {...trackScreen("app", 390)} style={{ width: 640 }} />
+ */
+export declare function trackScreen(name: string, native: number, o?: TrackOptions & {
+    minTextPx?: number;
+}): Record<string, string | undefined>;
 /**
  * Track words on screen (a caption, a speech bubble, a heading) for the text
  * rules: its whole text, and how many characters of it are showing.

@@ -183,6 +183,7 @@ export function mount(root: HTMLElement) {
   <button type="button" class="btn btn-outline-primary" data-act="check">Run the motion check</button>
   <label class="rd-check"><input type="checkbox" data-act="bug"> Plant a bug (a sticker that pops in)</label>
   <label class="rd-check"><input type="checkbox" data-act="textbug"> Plant a text bug (the caption cut off mid-word)</label>
+  <label class="rd-check"><input type="checkbox" data-act="snap"> Plant a snap (the caption types in low, then jumps up)</label>
   <button type="button" class="btn btn-outline-primary" data-act="wav">Render WAV offline</button>
 </div>
 <pre aria-live="polite">The motion check report shows here.</pre>`;
@@ -194,6 +195,7 @@ export function mount(root: HTMLElement) {
   const report = root.querySelector<HTMLElement>("pre")!;
   const bugBox = root.querySelector<HTMLInputElement>('[data-act="bug"]')!;
   const textBugBox = root.querySelector<HTMLInputElement>('[data-act="textbug"]')!;
+  const snapBox = root.querySelector<HTMLInputElement>('[data-act="snap"]')!;
   const capEl = root.querySelector<HTMLElement>(".rd-cap")!;
   const letterEls = LETTERS.map((ch) => root.querySelector<HTMLElement>(`[data-romp="letter:${ch}"]`)!);
   const whoEls = [...CAST, ZIP].map((c) => root.querySelector<HTMLElement>(`[data-romp="${c.id}"]`)!);
@@ -279,6 +281,8 @@ export function mount(root: HTMLElement) {
     const typed = on ? CAP.typed(cf) : 0;
     capEl.textContent = CAPTION.slice(0, typed);
     capEl.dataset.rompCharsShown = String(typed);
+    // The snap: it starts 60 px below its place and jumps up a third of a second in.
+    capEl.style.transform = snapBox.checked && on && cf < 10 ? "translateY(60px)" : "";
     capEl.style.opacity = String(textBugBox.checked && on ? Math.min(1, (cf + 1) / 4) : Math.max(0, Math.min(1, (cf + 1) / 4, (end - cf) / CAP.exitFrames)));
     scrub.value = String(t);
     time.textContent = `${t.toFixed(1)} s`;
@@ -355,11 +359,11 @@ export function mount(root: HTMLElement) {
     report.textContent =
       formatReport(r, FPS) +
       (r.issues.length
-        ? "\n\nUntick the planted bugs and run it again: the sticker then grows in, the caption finishes and stays up long enough to read, and the check passes."
+        ? "\n\nUntick the planted bugs and run it again: the sticker then grows in, the caption finishes, stays up long enough to read and types in where it stays, and the check passes."
         : "\n\nNo pops, strobes, teleports, spikes or crops. The sharp turns are real impacts, marked as such; the character that flies in from off-frame is entering, so its partial crop is fine; and the sparks are checked as one burst that grows in and fades out. The caption is tracked as text: it types in, stays whole for its reading time and sits inside the safe area. Tick a “Plant a bug” box to watch it catch one.");
   };
 
-  bugBox.onchange = textBugBox.onchange = () => seek(clock.t);
+  bugBox.onchange = textBugBox.onchange = snapBox.onchange = () => seek(clock.t);
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches ? 6.5 : 0;
   seek(still);
   return { seek, clock, schedule, stage };

@@ -9,8 +9,10 @@
  *               overhang only shrinks, or only grows) is fine
  *   covers      a text sits over the `focus` (the highlighted thing being talked
  *               about) for more than `coversSeconds` (0.1 s)
- *   overlap     two texts overlap, or a prop is drawn over a text (papers or dots
- *               over a title) for more than `overlapSeconds` (0.2 s)
+ *   overlap     two texts overlap for more than `overlapSeconds` (0.2 s), or a
+ *               prop is drawn over a text (papers, a vehicle, confetti crossing a
+ *               title) for more than `propOverlapSeconds` (two frames): a fast
+ *               prop over words is exactly what reads as a glitch
  *   unfinished  a text disappears, or its scene cuts, before every character is
  *               shown: a caption cut off mid-word
  *   unread      a text is whole for less than its reading time (`readingTime()`)
@@ -50,8 +52,10 @@ export interface TextOptions {
   coversSeconds?: number;
   /** overlap: the share of the smaller box two objects may share (default 0.02) */
   overlapFraction?: number;
-  /** overlap: how long (default 0.2 s) */
+  /** overlap: how long two texts may (default 0.2 s) */
   overlapSeconds?: number;
+  /** overlap: how long a prop may be drawn over a text (default 0.04 s: two frames in a row at 30 fps) */
+  propOverlapSeconds?: number;
   /** empty: how long a text's box may show no words (default 0.2 s) */
   emptySeconds?: number;
   /** empty: how long a heading may still be typing after it appears (default 0.5 s) */
@@ -208,7 +212,7 @@ export function textIssues(frames: FrameRow[], names: string[], o: TextOptions &
   }
 
   // ── covers, overlap ─────────────────────────────────────────────────────────
-  const coversRun = run(o.coversSeconds ?? 0.1), overlapRun = run(o.overlapSeconds ?? 0.2);
+  const coversRun = run(o.coversSeconds ?? 0.1), overlapRun = run(o.overlapSeconds ?? 0.2), propRun = Math.max(1, run(o.propOverlapSeconds ?? 0.04));
   const coversFrac = o.coversFraction ?? 0.05, overlapFrac = o.overlapFraction ?? 0.02;
   const runs = new Map<string, { start: number; n: number; flagged: boolean; seen: number }>();
   for (let i = 0; i < frames.length; i++) {
@@ -249,7 +253,7 @@ export function textIssues(frames: FrameRow[], names: string[], o: TextOptions &
           if (q.z != null && t.z != null && q.z < t.z) continue;
           const share = shared / Math.max(1, Math.min(areaOf(tb), areaOf(qb)));
           if (share > overlapFrac && !allowed("overlap", ts[a]) && !allowed("overlap", n))
-            bump(`p|${ts[a]}|${n}`, "overlap", ts[a], overlapRun, () => `${n} is drawn over it (${Math.round(share * 100)}% of the smaller)`);
+            bump(`p|${ts[a]}|${n}`, "overlap", ts[a], propRun, () => `${n} is drawn over it (${Math.round(share * 100)}% of the smaller)`);
         }
       }
     }
