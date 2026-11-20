@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.7.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.8.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -66,6 +66,7 @@
 <div class="grid">
   <div class="card"><h3>romp/core</h3><p>A planck.js (Box2D) <code>Stage</code> baked once per scene, bodies that record their impacts, springy letters that wobble back, and the motion vocabulary: <code>impactResponse</code>, <code>landing</code>, <code>hop</code>, <code>jiggleParts</code>, blinks. A <code>Clock</code> for live playback.</p></div>
   <div class="card"><h3>romp/check</h3><p>The motion check: pops, strobes, teleports, spikes and crops, with exemptions for real impacts, deliberate whips, covered frames and fades. Text rules for captions, bubbles and headings: safe area, covering the focus, overlaps, unfinished, unread, empty. Collectors for DOM pages and three.js scenes; <code>romp check</code> for Remotion, with <code>--audio</code> for soundtrack dropouts.</p></div>
+  <div class="card"><h3>romp/pipeline</h3><p>Review sheets straight from the composition, per-scene renders with a cache (only what changed renders, joined without re-encoding), a cached soundtrack, one-pass multi-size encodes, and a plan lint that checks a film's layout in milliseconds, before anything renders. <code>romp sheet</code>, <code>romp render</code>, <code>romp lint</code>.</p></div>
   <div class="card"><h3>romp/timing</h3><p><code>readingTime</code>, <code>captionTiming</code> and <code>timeline</code>: scene lengths from their captions, transitions off the reading windows, act cards at a sane length. A film timed with them passes the text rules by construction.</p></div>
   <div class="card"><h3>romp/audio</h3><p>Synthesised voices and instruments, a mix tuned for phone speakers, and one schedule played live or rendered offline. <code>listen()</code> turns it into signals the picture can react to: envelopes, beats, onsets. <code>romp/audio/cartoon</code> adds plops, boings, slurps and gibberish character voices.</p></div>
   <div class="card"><h3>romp/particles</h3><p>Confetti, sparks, snow and fountains from a seeded emitter: every particle a pure function of the frame, landing on your stage's grounds, plain data for any renderer.</p></div>
@@ -100,7 +101,7 @@ const look = impactResponse(hero, frame);        // { squashX, squashY, tilt, li
 </section>
 
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.7.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.8.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
 <script type="module">
   import { mount } from "./demo.js?v=87762fb3";
   window.romp = mount(document.getElementById("romp-demo"));

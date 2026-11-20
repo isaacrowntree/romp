@@ -123,6 +123,9 @@ boxGap(a, b): px                                          // the distance betwee
 <h3 data-export="trackText" id="trackText">trackText</h3>
 <pre class="sig"><code>trackText(name, text, { typed?, heading?, …track options }): { "data-romp", "data-romp-role": "text", "data-romp-text", "data-romp-chars-shown", "data-romp-chars-total", … }</code></pre>
 <p>Words on screen for the text rules: the whole text (<code>*highlight*</code> markers dropped) and how many characters are showing.</p>
+<h3 data-export="renderPlan" id="renderPlan">renderPlan</h3>
+<pre class="sig"><code>renderPlan(timeline, { files?(scene), media?(scene), props?(scene) }): { frames, scenes: { name, from, frames, files?, media?, props }[], transitions }</code></pre>
+<p>A timeline's scenes and transitions for <code>romp render</code>; each scene keyed by its captions and what <code>props</code> returns.</p>
 <h3 data-export="sceneSequence" id="sceneSequence">sceneSequence</h3>
 <pre class="sig"><code>sceneSequence(placedScene): { from, durationInFrames, name }     // props for a &lt;Sequence&gt;</code></pre>
 <h3 data-export="trackBurst" id="trackBurst">trackBurst</h3>
@@ -152,6 +155,9 @@ renderWav(schedule, options): Promise&lt;string&gt;     // base64 WAV</code></pr
 <h3 data-export="fitTo" id="fitTo">fitTo · midiHz · rng · wavBase64 · LEAD</h3>
 <pre class="sig"><code>fitTo(pitchClasses, midi): midi     midiHz(midi): Hz     rng(seed): () =&gt; 0..1
 wavBase64(audioBuffer): string      LEAD = 1 / 30        // transients lead the picture by a frame</code></pre>
+<h3 data-export="soundKey" id="soundKey">soundKey</h3>
+<pre class="sig"><code>soundKey(schedule, renderOptions, ...deps): hex     // deps: the data the schedule reads (a function's source doesn't show it)</code></pre>
+<p>With <code>cachedFile</code> from romp/pipeline, an unchanged soundtrack is reused; <code>romp sound --cache</code> keys by the whole bundled module.</p>
 <h3 data-export="crossfadeBed" id="crossfadeBed">crossfadeBed</h3>
 <pre class="sig"><code>crossfadeBed(synth, out, { from, to, write(out, t0, t1), level? }[], { fade?: 0.5 }): joins</code></pre>
 <p>One continuous bed: each section's end is stretched to the next one's start, each is written <code>fade / 2</code> past its joins, and an equal-power crossfade joins them.</p>
@@ -235,10 +241,54 @@ byKey(view, keys): Record&lt;key, node&gt;      nodeSample(node, width, height):
 lottieFrames(anim, options): FrameRow[]          // goToAndStop(f, true) for every frame
 collectLottie(anim, { layers?, width?, height? }): Record&lt;name, Sample&gt;</code></pre>
 
+<h2 id="pipeline">romp/pipeline</h2>
+<p>Framework-free; Node only, except <code>keyOf</code>, <code>stableKey</code>, <code>hashString</code>, <code>planSegments</code> and <code>lintPlan</code>.</p>
+<h3 data-export="lintPlan" id="lintPlan">lintPlan · formatLint</h3>
+<pre class="sig"><code>lintPlan({ width, height, scenes: { name, camera?: { scale, x, y }, items?: PlanItem[], focus?, beats?: { name?, camera?, items?, focus? }[] }[],
+           safe?, band?: { top, bottom }, banned?: (string | RegExp)[], occupancy?, fillFraction?: 0.01, options?: AnalyzeOptions }):
+  { issues: { scene, beat?, name, kind, detail }[], scenes, beats }
+PlanItem = { name, role: "text" | "focus" | "prop" | "screen" | "background" | "device", box: { x, y, width, height },
+             text?, fontPx?, heading?, opaque?, native?: { width }, minTextPx?, device?, screenRect?, z?, fixed?, allow?, anchor?, ground? }
+kind = offsafe | covers | overlap | legibility | cropped | clipped | anchor | occupancy | fill | focus | banned | band</code></pre>
+<h3 data-export="planSegments" id="planSegments">planSegments</h3>
+<pre class="sig"><code>planSegments(scenes: { name, from, frames }[], { transitions?: [from, to][], total? }): { name, from, to, scenes }[]</code></pre>
+<p>Cuts at every scene's start and end and at transition edges, never strictly inside a transition; a stretch two scenes share is its own segment.</p>
+<h3 data-export="keyOf" id="keyOf">keyOf · stableKey · hashString</h3>
+<pre class="sig"><code>keyOf(...parts): hex     stableKey(value): string     hashString(s): hex     // functions keyed by source; any runtime</code></pre>
+<h3 data-export="cachedFile" id="cachedFile">cachedFile</h3>
+<pre class="sig"><code>cachedFile(dir, key, ext, make(tmpPath): Promise): Promise&lt;{ path, hit }&gt;     // made once, atomically</code></pre>
+<h3 data-export="hashFiles" id="hashFiles">hashFiles · stampFiles · listFiles</h3>
+<pre class="sig"><code>listFiles(paths, root?): string[]     hashFiles(files, root?): hex (contents)     stampFiles(files, root?): hex (size and mtime)</code></pre>
+<h3 data-export="montage" id="montage">montage · sheetHtml · timecode</h3>
+<pre class="sig"><code>montage(tiles: { file, label }[], outDir, { cols?: 4, rows?: 3, tileWidth?: 480, title?, quality?: 82, prefix? }): Promise&lt;string[]&gt;</code></pre>
+<p>Contact-sheet pages, laid out in headless Chromium (playwright).</p>
+<h3 data-export="encodeArgs" id="encodeArgs">encodeArgs · concat · muxArgs · probe · ffmpeg</h3>
+<pre class="sig"><code>encodeArgs(input, { file, height?, crf?: 18, preset?: "medium", audio?: "192k" | false }[]): string[]     // one decode, split, N encodes
+concat(files, out): Promise     concatArgs(list, out)     muxArgs(video, audio, out)     probe(file): { frames, seconds, width, height, fps }</code></pre>
+<h3 data-export="marksFromVideo" id="marksFromVideo">marksFromVideo · parseMarks</h3>
+<pre class="sig"><code>marksFromVideo(file, { threshold?: 0.3, minGap?: 0.5 }): Promise&lt;seconds[]&gt;     // cuts by frame difference</code></pre>
+<h3 data-export="acquireLock" id="acquireLock">acquireLock</h3>
+<pre class="sig"><code>acquireLock(name, { dir? }): { file, release() }     // throws LockHeld while another live process holds it</code></pre>
+
+<h2 id="render">romp/remotion/render</h2>
+<p>Node only; needs <code>@remotion/renderer</code> and <code>@remotion/bundler</code>.</p>
+<h3 data-export="renderScenes" id="renderScenes">renderScenes</h3>
+<pre class="sig"><code>renderScenes({ entry, composition, scenes: { name, from, frames, files?, props?, media? }[], transitions?, frames?, src?: ["src"],
+               shared?, publicDir?: "public", audio?, out, cache?: ".romp/cache", crf?: 18, x264Preset?, concurrency?, gl?, scale?, force? }): Promise&lt;Manifest&gt;
+Manifest = { out, frames, segments: { name, from, to, scenes, key, file, rebuilt, seconds }[], rebuilt: scene[], seconds: { bundle, render, join, total } }</code></pre>
+<h3 data-export="renderSheet" id="renderSheet">renderSheet · renderStill</h3>
+<pre class="sig"><code>renderSheet({ entry, composition, from?, to?, every?: fps, scale?: 0.5, cols?, rows?, tileWidth?, sections?, out, concurrency?, gl? }): Promise&lt;{ pages, frames, seconds }&gt;
+renderStill({ entry, composition, frame, out, scale?: 1 }): Promise&lt;path&gt;</code></pre>
+<h3 data-export="bench" id="bench">bench · sceneKeys</h3>
+<pre class="sig"><code>bench({ entry, composition, frames?: [0, 149], concurrencies? }): Promise&lt;{ results: { concurrency, seconds, fps }[], best }&gt;
+sceneKeys(config, root?): { shared, scenes: Record&lt;name, key&gt; }</code></pre>
+
 <h2 id="cli">CLI</h2>
 <pre><code>romp check &lt;entry.tsx&gt; [--public dir] [--from s] [--to s] [--arg json] [--strict] [--audio file.wav] [--json]
 romp check --audio &lt;file.wav&gt; [--json]
 romp check --lottie &lt;anim.json&gt; [--layers a,b] [--from s] [--to s] [--json]
-romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16]</code></pre>
+romp sheet|render|bench [romp.render.ts] …     romp lint &lt;plan.ts&gt;
+romp encode &lt;in.mp4&gt; --out a.mp4 --out b.mp4@1080     romp marks &lt;video&gt;     romp lock &lt;name&gt; -- &lt;command…&gt;
+romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16] [--cache .romp/cache]</code></pre>
 <p><code>romp check</code> exits 1 on any issue: motion, text or audio. <code>--strict</code> counts untagged objects as props for the overlap rule and runs the stale rule.</p>
 </div>

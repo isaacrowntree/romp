@@ -11,6 +11,7 @@
   <a href="#check">The motion check</a><br>
   <a href="#text">Text on screen: the text rules and timing</a><br>
   <a href="#dropouts">The soundtrack: dropouts and one bed</a><br>
+  <a href="#pipeline">The render pipeline: sheets, scene renders, sound cache, plan lint</a><br>
   <a href="#timelines">Other timelines: Lottie, Theatre.js, Motion Canvas</a>
 </nav>
 
@@ -273,6 +274,49 @@ crossfadeBed(s, bus.music, [
   { from: 0, to: 12.4, write: (out, t0, t1) =&gt; groove(s, out, t0, t1) },
   { from: 12.4, to: 40, write: (out, t0, t1) =&gt; pads(s, out, t0, t1) },
 ], { fade: 0.6 });</code></pre>
+
+<h2 id="pipeline">The render pipeline: sheets, scene renders, a sound cache and a plan lint</h2>
+<p>Most of the time spent on a film made in code goes on full renders made only to look at it. <code>romp/pipeline</code> (framework-free) and <code>romp/remotion/render</code> (the thin Remotion binding; install <code>@remotion/renderer</code> and <code>@remotion/bundler</code>) cut that down. The commands read <code>romp.render.ts</code> unless given another config:</p>
+<pre><code>import { renderPlan } from "romp/remotion";
+import { film } from "./src/film";       // your timeline()
+
+export default {
+  entry: "src/index.ts", composition: "Film", fps: 30,
+  ...renderPlan(film, { files: (s) =&gt; [`src/scenes/${s.name}.tsx`], media: (s) =&gt; [`public/rec/${s.name}.mp4`] }),
+  audio: "out/sound.wav", out: "out/film.mp4",
+};</code></pre>
+<ul>
+  <li><strong><code>romp sheet</code></strong>: contact sheets straight from the composition. One <code>renderFrames</code> call renders every Nth frame (default one a second) at half scale as JPEGs; they're laid out 4×3 per page, each tile labelled with its timestamp, frame and scene. <code>--scene</code>, <code>--from/--to</code>, <code>--every</code>, <code>--scale</code>, <code>--cols/--rows</code>, <code>--out</code>; <code>--still &lt;frame&gt;</code> renders one full-size frame.</li>
+  <li><strong><code>romp render</code></strong>: per-scene rendering with a cache. Segments are cut at scene boundaries, never inside a transition (an overlap of two scenes, or a span you declare). A segment's key covers every scene it shows (its <code>props</code>, its <code>files</code> by content, its <code>media</code> by size and time), the rest of <code>src</code>, <code>package.json</code> and lockfiles, the rest of <code>public</code>, and the render settings. Only changed segments render (muted, one browser); they're joined with <code>ffmpeg -c copy</code> and the soundtrack is muxed once. A manifest beside the output says what was rebuilt. If a scene's own files are hard to list, leave <code>files</code> out: it then shares everything under <code>src</code>, and any source edit re-renders every segment, which is still correct.</li>
+  <li><strong><code>romp sound --cache .romp/cache</code></strong>: keyed by the bundled module (schedule, voices, the timeline it reads), its argument and the loudness. In code: <code>soundKey(schedule, opts, ...deps)</code> and <code>cachedFile(dir, key, ".wav", make)</code>.</li>
+  <li><strong><code>romp lint plan.ts</code></strong>: the plan lint, below.</li>
+  <li><strong><code>romp bench</code></strong> times a short range at several concurrencies and prints the fastest; <strong><code>romp encode in.mp4 --out master.mp4 --out share.mp4@1080</code></strong> makes every size in one ffmpeg pass; <strong><code>romp marks rec.mp4</code></strong> finds cuts in a long recording by frame difference; <strong><code>romp lock &lt;name&gt; -- &lt;command…&gt;</code></strong> keeps one capture per device (a second is refused with exit 75).</li>
+</ul>
+<p>On <code>examples/pipeline</code> (6,000 frames, 20 scenes, 4K portrait) a review sheet takes 6.7&nbsp;s instead of 175&nbsp;s for a full render and frame grab, a one-scene fix re-renders in 28&nbsp;s instead of 167&nbsp;s, an unchanged soundtrack comes back in 0.2&nbsp;s instead of 43&nbsp;s, and the plan lint takes 0.06&nbsp;s.</p>
+<h3>The plan lint</h3>
+<p>A plan is data: per scene (and per beat), the boxes on screen, in composition px, and the camera that frames them (out = in × <code>scale</code> + (<code>x</code>, <code>y</code>); items with <code>fixed: true</code> ignore it). Roles are the frame check's (<code>text</code>, <code>focus</code>, <code>prop</code>, <code>screen</code>, <code>background</code>) plus <code>device</code>, a phone or browser frame with a <code>screenRect</code>. The lint holds each beat still and runs the frame check's layout rules on it, with the same names and thresholds: offsafe, covers, overlap, legibility (after the zoom: a text's <code>fontPx</code> and a screen's native width both scale with the camera), cropped, clipped, anchor and, when asked, occupancy. And four of its own:</p>
+<table>
+  <thead><tr><th>Issue</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td>fill</td><td>A screen doesn't fill its device's <code>screenRect</code>: letterboxed, or cropped inside it, by more than 1% on a side (<code>fillFraction</code>).</td></tr>
+    <tr><td>focus</td><td>A beat marked <code>focus: true</code> (the voice-over points at something) has no focus box.</td></tr>
+    <tr><td>banned</td><td>A text uses a word or pattern in <code>banned</code> (strings match whole words, any case).</td></tr>
+    <tr><td>band</td><td>With <code>band: { top, bottom }</code>: a heading outside the reserved band, or anything else in it.</td></tr>
+  </tbody>
+</table>
+<pre><code>// plan.ts: from the same layout functions the components use
+import { film, layout } from "./src/film";
+export default {
+  width: 2160, height: 3840, band: { top: 240, bottom: 620 }, banned: ["simply", /\bseamless(ly)?\b/i],
+  scenes: film.scenes.map((s) =&gt; ({ name: s.name, camera: layout.camera(s), items: [
+    { name: "heading", role: "text", heading: true, text: s.title, fontPx: 150, box: layout.heading },
+    { name: "phone", role: "device", box: layout.device, screenRect: layout.screen },
+    { name: "app", role: "screen", device: "phone", native: { width: 390 }, box: layout.screen },
+  ] })),
+};</code></pre>
+<p>To make a Remotion film lintable, keep its layout in plain functions (boxes, font sizes, the camera per beat) in a module that doesn't import React, and call them from both the components and <code>plan.ts</code>. <code>examples/pipeline</code> in the repository is a 20-scene, 6,000-frame film wired this way, with its <code>romp.render.ts</code>, <code>plan.ts</code> and <code>sound.ts</code>.</p>
+<h3>Render settings and capture</h3>
+<p>Run <code>romp bench</code> once per machine and put its concurrency in the config. Use <code>gl: "angle"</code> on macOS for WebGL or heavy CSS filters; leave it unset for plain DOM. Keep every segment at h264 with one <code>crf</code> (18 for review and share copies) so <code>-c copy</code> joins work, and make share sizes from the master with <code>romp encode</code>. romp doesn't drive simulators or test runners: wrap your capture command in <code>romp lock &lt;device&gt; -- …</code>, record one long take and split it per beat with <code>romp marks</code>.</p>
 
 <h2 id="timelines">Other timelines: Lottie, Theatre.js, Motion Canvas</h2>
 <p>Anything you can seek can host romp's baked motion and be checked. These adapters are thin: none of them imports its library (each is an optional peer dependency), so they load anywhere and you pass in what they need.</p>

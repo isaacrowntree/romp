@@ -60,6 +60,22 @@ export function trackText(name, text, o = {}) {
         "data-romp-heading": o.heading ? "1" : undefined,
     };
 }
+/**
+ * The scenes and transitions of a timeline, for `romp render --scenes`
+ * (`renderScenes` in romp/remotion/render): each scene keyed by its captions
+ * and anything else you pass in `props`, each transition declared so no cut
+ * splits it.
+ *
+ *   export default { entry: "src/index.ts", composition: "Film", out: "out/film.mp4",
+ *     ...renderPlan(film, { files: (s) => [`src/scenes/${s.name}.tsx`] }) };
+ */
+export function renderPlan(film, o = {}) {
+    return {
+        frames: film.frames,
+        scenes: film.scenes.map((s) => ({ name: s.name, from: s.start, frames: s.frames, files: o.files?.(s), media: o.media?.(s), props: { captions: (s.captions ?? []).map((c) => c.text), extra: o.props?.(s) ?? null } })),
+        transitions: film.scenes.filter((s) => s.transitionIn > 0).map((s) => [s.start, s.start + s.transitionIn]),
+    };
+}
 /** Props for a `<Sequence>` (or a `TransitionSeries.Sequence`'s length) from a placed scene. */
 export function sceneSequence(scene) {
     return { from: scene.start, durationInFrames: scene.frames, name: scene.name };

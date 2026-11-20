@@ -22,7 +22,22 @@
 //   romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]
 //     Plays a Lottie (After Effects) export with lottie-web in headless Chromium,
 //     every frame, and runs the motion check over its layers (romp/lottie).
-//   romp sound <module.ts> --out <file.wav> [--arg <json>] [--lufs -16]
+//   romp sheet [romp.render.ts] [--out dir] [--every n] [--scale 0.5] [--cols 4] [--rows 3] [--scene name] [--from s] [--to s]
+//     Contact sheets: every Nth frame (default one a second) at a low scale, as
+//     one JPEG sequence (one renderFrames call), laid out in pages with a
+//     timestamp per tile. --still <frame> renders one full-size frame instead.
+//   romp render [romp.render.ts] [--force scene,…] [--concurrency n] [--gl angle]
+//     Per-scene render with a cache: only segments whose scenes, sources or
+//     media changed are rendered, joined with -c copy, the soundtrack muxed once.
+//   romp bench [romp.render.ts] [--frames a-b] [--concurrency 1,2,4,8]
+//     The fastest Remotion concurrency on this machine.
+//   romp lint <plan.ts> [--json]      the plan lint (no browser)
+//   romp encode <in.mp4> --out a.mp4 --out b.mp4@1080 [--crf 18] [--preset medium]
+//     One decode, several encodes (a 4K master and a 1080p share copy).
+//   romp marks <recording.mp4> [--threshold 0.3] [--min-gap 0.5] [--json]
+//     Cut points in a long recording, by frame difference.
+//   romp lock <name> -- <command…>   run a command holding a lock; a second one is refused
+//   romp sound <module.ts> --out <file.wav> [--arg <json>] [--lufs -16] [--cache .romp/cache]
 //     The module exports `render(arg)` returning an AudioBuffer or a base64 WAV
 //     (romp/audio's renderOffline / renderWav). Rendered in headless Chromium,
 //     loudness-normalised with ffmpeg when it's on PATH.
@@ -57,6 +72,9 @@ const strict = strictAt >= 0 && !!argv.splice(strictAt, 1);
 // `romp check --lottie anim.json`: the file follows the flag (a .json entry means the same).
 const lottieAt = argv.indexOf("--lottie");
 const lottieFile = lottieAt >= 0 ? argv.splice(lottieAt, 2)[1] : argv[0] === "check" && /\.json$/i.test(argv[1] ?? "") ? argv.splice(1, 1)[0] : null;
+// The pipeline commands read romp.render.ts unless given a config.
+const PIPE = ["render", "sheet", "still", "bench"];
+if (PIPE.includes(argv[0]) && (argv[1] == null || argv[1].startsWith("--"))) argv.splice(1, 0, "romp.render.ts");
 const cmd = argv[0];
 const file = lottieFile ?? argv[1];
 const rest = argv.slice(lottieFile ? 1 : 2);
@@ -68,7 +86,7 @@ const flag = (name, def) => {
 };
 const audioOnly = cmd === "check" && audioFile && (!file || file.startsWith("--"));
 if (!cmd || (!file && !audioOnly) || cmd === "--help") {
-  console.log("usage:\n  romp check <entry.tsx> [--public dir] [--from s] [--to s] [--scene name] [--scenes] [--jobs n] [--every n] [--arg json] [--strict] [--untracked error] [--occupancy [share]] [--no-media] [--paced] [--audio file.wav] [--json]\n  romp check --audio <file.wav> [--json]\n  romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]\n  romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]");
+  console.log("usage:\n  romp sheet|render|bench [romp.render.ts] …   romp lint <plan.ts>   romp encode <in> --out a.mp4 --out b.mp4@1080\n  romp marks <video>   romp lock <name> -- <command…>\n  romp check <entry.tsx> [--public dir] [--from s] [--to s] [--scene name] [--scenes] [--jobs n] [--every n] [--arg json] [--strict] [--untracked error] [--occupancy [share]] [--no-media] [--paced] [--audio file.wav] [--json]\n  romp check --audio <file.wav> [--json]\n  romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]\n  romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]");
   process.exit(cmd ? 0 : 1);
 }
 
@@ -84,6 +102,146 @@ if (audioOnly) {
   const a = await audioCheck();
   console.log(argv.includes("--json") ? JSON.stringify({ audio: { file: a.file, dropouts: a.dropouts } }) : a.text);
   process.exit(a.dropouts.length ? 1 : 0);
+}
+
+
+// ── The pipeline: config loading, lint, encode, marks, lock, render, sheet ──
+/** Import a TS/JS module (a config, a plan) in Node: bundled with esbuild next to the project's node_modules. */
+async function loadModule(file) {
+  const { build: esb } = need("esbuild");
+  const dir = path.join(cwd, ".romp", "tmp");
+  fs.mkdirSync(dir, { recursive: true });
+  const out = path.join(dir, `${path.basename(file).replace(/\W+/g, "_")}-${process.pid}.mjs`);
+  await esb({ entryPoints: [path.resolve(file)], bundle: true, format: "esm", platform: "node", packages: "external", outfile: out, logLevel: "warning", jsx: "automatic", loader: { ".png": "empty", ".jpg": "empty", ".svg": "empty", ".mp4": "empty", ".wav": "empty", ".css": "empty" } });
+  try {
+    const m = await import(`${out}?t=${Date.now()}`);
+    const v = m.default ?? m;
+    return typeof v === "function" ? await v(flag("arg") ? JSON.parse(flag("arg")) : undefined) : v;
+  } finally {
+    fs.rmSync(out, { force: true });
+  }
+}
+const pipe = async (m) => import(path.join(dist, m));
+const secsOf = (t0) => ((performance.now() - t0) / 1000).toFixed(1);
+const listFlag = (name) => {
+  const out = [];
+  rest.forEach((a, i) => { if (a === `--${name}` && rest[i + 1] && !rest[i + 1].startsWith("--")) out.push(rest[i + 1]); });
+  return out;
+};
+
+if (cmd === "lint") {
+  const { lintPlan, formatLint } = await pipe("pipeline/lint.js");
+  const t0 = performance.now();
+  const plan = await loadModule(file);
+  const r = lintPlan(plan);
+  console.log(flag("json") ? JSON.stringify(r) : formatLint(r));
+  console.error(`romp lint: ${secsOf(t0)} s`);
+  process.exit(r.issues.length ? 1 : 0);
+}
+
+if (cmd === "encode") {
+  const { encodeArgs, ffmpeg } = await pipe("pipeline/ffmpeg.js");
+  const outs = listFlag("out").map((o) => {
+    const [f, h] = o.split("@");
+    return { file: path.resolve(f), height: h ? +h : undefined, crf: flag("crf") ? +flag("crf") : undefined, preset: typeof flag("preset") === "string" ? flag("preset") : undefined };
+  });
+  if (!outs.length) {
+    console.error("romp encode: give at least one --out file.mp4[@height]");
+    process.exit(2);
+  }
+  const t0 = performance.now();
+  await ffmpeg(encodeArgs(path.resolve(file), outs));
+  console.log(`${outs.map((o) => path.relative(cwd, o.file)).join(", ")} (${secsOf(t0)} s, one pass)`);
+  process.exit(0);
+}
+
+if (cmd === "marks") {
+  const { marksFromVideo } = await pipe("pipeline/ffmpeg.js");
+  const marks = await marksFromVideo(path.resolve(file), { threshold: flag("threshold") ? +flag("threshold") : undefined, minGap: flag("min-gap") ? +flag("min-gap") : undefined });
+  console.log(flag("json") ? JSON.stringify(marks) : marks.map((t) => t.toFixed(3)).join("\n"));
+  process.exit(0);
+}
+
+if (cmd === "lock") {
+  const { acquireLock, LockHeld } = await pipe("pipeline/lock.js");
+  const dd = process.argv.indexOf("--");
+  const command = dd >= 0 ? process.argv.slice(dd + 1) : [];
+  let lock;
+  try {
+    lock = acquireLock(file, { dir: typeof flag("dir") === "string" ? flag("dir") : undefined });
+  } catch (e) {
+    if (e instanceof LockHeld) {
+      console.error(`romp lock: ${e.message}; refusing to start a second one`);
+      process.exit(75);
+    }
+    throw e;
+  }
+  if (!command.length) {
+    console.error(`romp lock: took ${lock.file}; give a command after --`);
+    lock.release();
+    process.exit(2);
+  }
+  const { spawnSync } = await import("node:child_process");
+  const res = spawnSync(command[0], command.slice(1), { stdio: "inherit" });
+  lock.release();
+  process.exit(res.status ?? 1);
+}
+
+if (PIPE.includes(cmd)) {
+  const cfg = await loadModule(file);
+  const R = await pipe("remotion/render.js");
+  const fps = cfg.fps ?? 30;
+  const settings = { ...cfg, ...(flag("concurrency") && cmd !== "bench" ? { concurrency: +flag("concurrency") } : {}), ...(typeof flag("gl") === "string" ? { gl: flag("gl") } : {}) };
+  const t0 = performance.now();
+  if (cmd === "render") {
+    const m = await R.renderScenes({ ...settings, force: typeof flag("force") === "string" ? flag("force").split(",") : cfg.force, out: typeof flag("out") === "string" ? flag("out") : cfg.out });
+    if (flag("json")) console.log(JSON.stringify(m));
+    else {
+      console.log(`${path.relative(cwd, m.out)}: ${m.frames} frames, ${m.segments.length} segments, ${m.segments.filter((s) => s.rebuilt).length} rendered (${m.rebuilt.join(", ") || "none"}) in ${m.seconds.total.toFixed(1)} s`);
+      console.log(`manifest: ${path.relative(cwd, m.out)}.manifest.json`);
+    }
+    process.exit(0);
+  }
+  if (cmd === "bench") {
+    const fr = typeof flag("frames") === "string" ? flag("frames").split("-").map(Number) : undefined;
+    const cs = typeof flag("concurrency") === "string" ? flag("concurrency").split(",").map(Number) : undefined;
+    const b = await R.bench({ ...settings, frames: fr, concurrencies: cs });
+    console.log(b.results.map((x) => `concurrency ${String(x.concurrency).padStart(2)}: ${x.seconds.toFixed(1).padStart(6)} s  ${x.fps.toFixed(1).padStart(6)} frames/s`).join("\n"));
+    console.log(`best: --concurrency ${b.best}`);
+    process.exit(0);
+  }
+  // sheet / still
+  const sections = (cfg.sections ?? cfg.scenes ?? []).map((s) => ("frames" in s ? { name: s.name, from: s.from, to: s.from + s.frames - 1 } : { name: s.name, from: Math.round(s.from * fps), to: Math.round(s.to * fps) - 1 }));
+  const still = cmd === "still" ? +file : flag("still");
+  if (cmd === "still" || (still != null && still !== true)) {
+    const frame = +(cmd === "still" ? flag("frame", 0) : still);
+    const out = await R.renderStill({ ...settings, frame, out: typeof flag("out") === "string" ? flag("out") : `out/still-${frame}.png` });
+    console.log(`${path.relative(cwd, out)} (${secsOf(t0)} s)`);
+    process.exit(0);
+  }
+  let from, to;
+  const sc = typeof flag("scene") === "string" ? sections.find((x, i) => x.name === flag("scene") || String(i + 1) === flag("scene")) : null;
+  if (typeof flag("scene") === "string" && !sc) {
+    console.error(`romp sheet: no scene "${flag("scene")}". Scenes: ${sections.map((x) => x.name).join(", ")}`);
+    process.exit(2);
+  }
+  if (sc) [from, to] = [sc.from, sc.to];
+  if (flag("from")) from = Math.round(+flag("from") * fps);
+  if (flag("to")) to = Math.round(+flag("to") * fps);
+  const r = await R.renderSheet({
+    ...settings,
+    from,
+    to,
+    every: flag("every") ? +flag("every") : undefined,
+    scale: flag("scale") ? +flag("scale") : undefined,
+    cols: flag("cols") ? +flag("cols") : undefined,
+    rows: flag("rows") ? +flag("rows") : undefined,
+    tileWidth: flag("tile") ? +flag("tile") : undefined,
+    sections,
+    out: typeof flag("out") === "string" ? flag("out") : "out/sheets",
+  });
+  console.log(`${r.pages.length} page(s), ${r.frames} frames, in ${r.seconds.toFixed(1)} s:\n  ${r.pages.map((p) => path.relative(cwd, p)).join("\n  ")}`);
+  process.exit(0);
 }
 
 const { build } = need("esbuild");
@@ -359,6 +517,19 @@ import { wavBase64 } from ${JSON.stringify(path.join(dist, "audio/wav.js"))};
 window.__rompSound = async (arg) => { const r = await M.render(arg); return typeof r === "string" ? r : wavBase64(r); };`,
     "sound",
   );
+  const arg0 = flag("arg") ? JSON.parse(flag("arg")) : undefined;
+  const lufs0 = flag("lufs", "-16");
+  // The cache key is everything that makes the sound: the bundled module (schedule, voices, timeline), its argument and the loudness.
+  const cacheDir = typeof flag("cache") === "string" ? path.resolve(flag("cache"), "sound") : null;
+  const { createHash } = await import("node:crypto");
+  // esbuild's path comments name the per-run temp dir: leave them out of the key.
+  const key = createHash("sha256").update(js.replace(/^\s*\/\/ .*$/gm, "")).update("\0").update(JSON.stringify(arg0 ?? null)).update("\0").update(String(lufs0)).digest("hex").slice(0, 24);
+  if (cacheDir && fs.existsSync(path.join(cacheDir, `${key}.wav`))) {
+    fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
+    fs.copyFileSync(path.join(cacheDir, `${key}.wav`), path.resolve(out));
+    console.log(`${out} (cached ${key})`);
+    process.exit(0);
+  }
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.setContent("<!doctype html><title>romp sound</title>");
@@ -377,5 +548,9 @@ window.__rompSound = async (arg) => { const r = await M.render(arg); return type
     console.warn("romp sound: ffmpeg not found, writing without loudness normalisation");
     fs.copyFileSync(raw, path.resolve(out));
   }
-  console.log(`${out} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+  if (cacheDir) {
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.copyFileSync(path.resolve(out), path.join(cacheDir, `${key}.wav`));
+  }
+  console.log(`${out} (${((Date.now() - t0) / 1000).toFixed(1)} s${cacheDir ? `, cached as ${key}` : ""})`);
 }

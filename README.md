@@ -298,6 +298,49 @@ bunx romp check check.tsx --audio public/sound/mix.wav  # both; either fails the
 
 `crossfadeBed(synth, bus.music, sections, { fade: 0.5 })` writes the music as one bed: each section's end is stretched to the next one's start, each is written a little past its joins, and an equal-power crossfade joins them.
 
+### The render pipeline: sheets, scene renders, a sound cache and a plan lint
+
+Most of the time spent on a film made in code isn't the check: it's full renders to look at it. `romp/pipeline` (framework-free) and `romp/remotion/render` (the thin Remotion binding, needing `@remotion/renderer` and `@remotion/bundler` in your project) cut that down. Each command reads a config, `romp.render.ts` by default:
+
+```ts
+// romp.render.ts
+import { renderPlan } from "romp/remotion";
+import { film } from "./src/film";          // your timeline()
+
+export default {
+  entry: "src/index.ts",                    // the file that calls registerRoot
+  composition: "Film",
+  fps: 30,
+  ...renderPlan(film, { files: (s) => [`src/scenes/${s.name}.tsx`], media: (s) => [`public/rec/${s.name}.mp4`] }),
+  audio: "out/sound.wav",
+  out: "out/film.mp4",
+};
+```
+
+- **`romp sheet`**: review contact sheets straight from the composition. One `renderFrames` call renders every Nth frame (default one a second) at half scale as JPEGs, then they're laid out in pages (4×3 by default) with a timestamp, frame number and scene name under each tile, in headless Chromium (no ffmpeg font filters needed). `--scene`, `--from/--to` (seconds), `--every`, `--scale`, `--cols/--rows`, `--tile`, `--out`. `--still <frame>` renders one full-size frame instead.
+- **`romp render`**: per-scene rendering with a cache. The film is cut into segments at scene boundaries; a transition (where two scenes overlap, or a span you declare in `transitions`) stays whole in one segment and is never cut. Each segment's key is the hash of every scene it shows (its `props`, its own `files` by content, its `media` by size and time), everything else under `src` (and `package.json`, lockfiles, the rest of `public` by size and time), and the render settings. Only segments whose key changed are rendered (muted, `frameRange`, one browser for all of them); then they're joined with `ffmpeg -c copy` (one render config, so the codec settings match) and the soundtrack is muxed once. It writes `out.mp4.manifest.json`: every segment, its key, whether it was rebuilt and how long it took. `--force scene,…` re-renders scenes regardless.
+- **`romp sound --cache .romp/cache`**: the soundtrack is keyed by the bundled module (the schedule, the voices, the timeline it reads), its `--arg` and the loudness, and reused when nothing changed. In code: `soundKey(schedule, opts, ...deps)` from `romp/audio` and `cachedFile(dir, key, ".wav", make)` from `romp/pipeline`.
+- **`romp lint plan.ts`**: the plan lint, in milliseconds and with no browser. A plan is data: per scene (and per beat), the boxes on screen and the camera that frames them. It runs the frame check's own layout rules with the same names and thresholds (offsafe, covers, overlap, legibility after the camera's zoom, cropped, clipped, anchor and, if asked, occupancy), plus four only a plan can answer: `fill` (a screen not filling its device's screen area), `focus` (a beat marked `focus` with no focus box), `banned` (words or patterns no text may use) and `band` (a reserved heading band: headings in it, nothing else).
+- **`romp bench`** times a short range at several concurrencies and prints the fastest (`--frames 0-149`, `--concurrency 1,2,4,8`). Pass the winner as `concurrency` in the config, or `--concurrency`.
+- **`romp encode in.mp4 --out master.mp4 --out share.mp4@1080`** decodes once and encodes every size in one ffmpeg process (`split`), instead of one pass per size.
+- **`romp marks recording.mp4`** finds cut points in a long screen recording by frame difference (`--threshold 0.3`, `--min-gap 0.5`), to split it per beat.
+- **`romp lock <name> -- <command…>`** runs a command holding a lock on a device or resource; a second one is refused (exit 75) while the first is alive, and a lock left by a dead process is taken over. `acquireLock(name)` in code.
+
+**How a Remotion film feeds the lint.** Keep the layout in plain functions (`phoneBox(scene)`, `headingBox(scene)`, the camera per beat) in a module that doesn't import React, and have both the components and `plan.ts` call them: the lint then checks what will render. `examples/pipeline` in this repo is a 20-scene, 6,000-frame film wired this way.
+
+**Capture.** romp doesn't drive simulators or test runners. Wrap your capture command in `romp lock <device> -- …` so two runs can't fight over one device, record one long take, and split it with `romp marks` (or `marksFromVideo`) into the beats your scenes use.
+
+**Render settings.** Run `romp bench` once per machine and keep its concurrency. Use `gl: "angle"` on macOS when scenes use WebGL or heavy CSS filters (it renders on the GPU); leave it unset for plain DOM. Keep segment renders at `codec: "h264"` with one `crf` (18 is visually lossless for review and share copies), so `-c copy` joins work, and make share copies from the master with `romp encode` rather than rendering twice.
+
+| On a 6,000-frame, 20-scene 4K portrait film | Before | With romp |
+|---|---|---|
+| A review sheet (1 frame a second) | 175 s (a full render, then 1 frame a second pulled out) | 6.7 s for all 200 tiles (17 pages); 2.4 s for one scene |
+| Re-render after a one-scene fix | 167 s (a full re-render) | 28 s (3 of 39 segments); 0.9 s to go back to a version already rendered |
+| Soundtrack, unchanged | 43 s | 0.2 s |
+| Plan lint | (render, then look) | 0.06 s for 20 scenes |
+
+Measured with `examples/pipeline` on a 12-core Apple-silicon laptop (`baseline.mjs` there is the before). A cold `romp render` costs a little more than one full render (234 s against 167 s: 39 renders instead of one); every render after that is only what changed. The real film these numbers were asked for is heavier (about 21 minutes per full 4K render), so its savings are bigger in seconds.
+
 ### CLI
 
 ```bash
@@ -305,7 +348,14 @@ romp check <entry.tsx> [--public dir] [--from s] [--to s] [--scene name] [--scen
            [--arg json] [--strict] [--untracked error] [--occupancy [share]] [--no-media] [--paced] [--audio file.wav] [--json]
 romp check --audio <file.wav> [--json]
 romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]
-romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]
+romp sheet [romp.render.ts] [--out dir] [--every n] [--scale 0.5] [--cols 4] [--rows 3] [--tile 480] [--scene name] [--from s] [--to s] [--still frame]
+romp render [romp.render.ts] [--force scene,…] [--concurrency n] [--gl angle] [--out file] [--json]
+romp bench [romp.render.ts] [--frames a-b] [--concurrency 1,2,4,8]
+romp lint <plan.ts> [--json]
+romp encode <in.mp4> --out a.mp4 --out b.mp4@1080 [--crf 18] [--preset medium]
+romp marks <recording.mp4> [--threshold 0.3] [--min-gap 0.5] [--json]
+romp lock <name> [--dir d] -- <command…>
+romp sound <module.ts> --out file.wav [--arg json] [--lufs -16] [--cache .romp/cache]
 ```
 
 `romp check` exits 1 on any issue (motion, text or audio). `--strict` counts every untagged tracked object as a prop for the overlap rule, runs the stale rule and warns about untracked drawing surfaces and plain text over a tracked text or screen; `--untracked error` makes those warnings fail the check. `romp sound` bundles a module exporting `render(arg)` (an `AudioBuffer` or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.
@@ -323,7 +373,7 @@ romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]
 | `romp/core` | `Stage` (`add`, `bake`, `pose`, `get`), `Body`, `SpringyBody`, `Drop`, `Leap`, `LAYER`, `poseAt`, `poseAtTime`, `baked`; `impactResponse`, `landing`, `hop`, `idle`, `blinkAt`, `boing`, `jiggle`, `jiggleParts`, `rock`, `nearImpact`; `ease`, `spring`, `ringOut`, `stagger`; `Clock` |
 | `romp/check` | `analyze`, `formatReport`, `collectDom`, `inFrameShare`, `safeArea`, `boxOverlap` |
 | `romp/timing` | `readingTime`, `wordCount`, `captionTiming`, `timeline`, `captionAt` |
-| `romp/remotion` | `track`, `trackText`, `trackBurst`, `sceneSequence`, `captionTiming`, `captionAt`, `timeline`, `readingTime`, `collectDom`, `analyze` |
+| `romp/remotion` | `track`, `trackText`, `trackScreen`, `trackBurst`, `sceneSequence`, `renderPlan`, `captionTiming`, `captionAt`, `timeline`, `readingTime`, `collectDom`, `analyze` |
 | `romp/three` | `motionReport`, `screenBox`, `screenArea`, `opacityOf` |
 | `romp/audio` | `Synth`, `Instruments`, `createMix`, `renderOffline`, `renderWav`, `playLive`, `listen`, `Score`, `fitTo`, `wavBase64`, `LEAD`, `crossfadeBed`, `dropouts`, `readWav`, `rmsWindows`, `formatDropouts` |
 | `romp/audio/cartoon` | `cartoon`, `VOICES` |
@@ -331,6 +381,8 @@ romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]
 | `romp/theatre` | `seekSequence`, `followSequence`, `objectSample`, `objectsRow`, `theatreFrames`, `theatreReport` |
 | `romp/motion-canvas` | `playBaked`, `centred`, `byKey`, `nodeSample`, `nodesRow`, `motionCanvasReport` |
 | `romp/lottie` | `collectLottie`, `lottieFrames`, `lottieReport` |
+| `romp/pipeline` | `lintPlan`, `formatLint`, `planSegments`, `keyOf`, `stableKey`, `hashString`, `cachedFile`, `listFiles`, `hashFiles`, `stampFiles`, `montage`, `sheetHtml`, `timecode`, `concat`, `concatArgs`, `muxArgs`, `encodeArgs`, `marksFromVideo`, `parseMarks`, `ffmpeg`, `probe`, `acquireLock` |
+| `romp/remotion/render` | `renderScenes`, `renderSheet`, `renderStill`, `bench`, `sceneKeys` |
 
 ## License
 

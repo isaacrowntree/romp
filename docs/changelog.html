@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.7.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.8.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -44,6 +44,21 @@
     <main id="main"><div class="shell">
 <section class="hero"><h1>Changelog</h1><p class="hero__lede">Every release, newest first. Versions follow SemVer.</p></section>
 <div class="prose changelog"><p>All notable changes to this project are documented here. Format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>; versions follow <a href="https://semver.org/">SemVer</a>.</p>
+<h2 id="0-8-0-2026-11-20">[0.8.0] — 2026-11-20</h2>
+<p>A timing analysis of a real 4K film made in code found most of the wall clock wasn't the check: it was full renders made only to look at the film (review sheets of one frame a second, each a full 4K render), full re-renders for one-scene fixes, and the soundtrack rendered again every round. This release adds the pipeline around a film: framework-free in <code>romp/pipeline</code>, with a thin Remotion binding in <code>romp/remotion/render</code> and CLI commands.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong><code>romp sheet</code></strong>: review contact sheets straight from the composition. One <code>renderFrames</code> call renders every Nth frame (default one a second) at half scale as JPEGs, laid out 4×3 per page with a timestamp, frame and scene name per tile (in headless Chromium: no ffmpeg font filter needed). <code>--scene</code>, <code>--from/--to</code>, <code>--every</code>, <code>--scale</code>, <code>--cols/--rows</code>, <code>--tile</code>, <code>--out</code>; <code>--still &lt;frame&gt;</code> for one full-size frame. On a 6,000-frame, 20-scene 4K portrait film: 6.7 s for 200 tiles (2.4 s for one scene), against 175 s for a full render and frame grab.</li>
+<li><strong><code>romp render</code></strong>: per-scene rendering with a cache. Segments are cut at scene boundaries and never inside a transition (an overlap of two scenes, or a declared span); each segment is keyed by the scenes it shows (their props, own files by content, media by size and time), the rest of the sources, and the render settings. Only changed segments render (muted, <code>frameRange</code>, one browser), then they're joined with <code>ffmpeg -c copy</code> and the soundtrack is muxed once. Writes a manifest of what was rebuilt. A one-scene fix on that film: 28 s (3 of 39 segments) against 167 s for a full re-render; the soundtrack's AAC is encoded once and copied in.</li>
+<li><strong>Soundtrack cache</strong>: <code>romp sound --cache dir</code> keys by the bundled module (schedule, voices, timeline), its argument and the loudness. <code>soundKey(schedule, opts, ...deps)</code> in romp/audio. 43 s → 0.2 s when unchanged.</li>
+<li><strong><code>romp lint plan.ts</code></strong>, <code>lintPlan()</code>: the plan lint. A plan is data (per scene and beat: boxes, font sizes, native screen sizes, the camera); it runs the frame check's layout rules with the same names and thresholds (offsafe, covers, overlap, legibility after zoom, cropped, clipped, anchor, occupancy) and four of its own: <code>fill</code>, <code>focus</code>, <code>banned</code>, <code>band</code>. No browser; milliseconds.</li>
+<li><strong><code>romp bench</code></strong>: the fastest Remotion concurrency on this machine.</li>
+<li><strong><code>romp encode</code></strong>, <code>encodeArgs()</code>: one decode, several sizes, one ffmpeg process (a 4K master and a 1080p share copy).</li>
+<li><strong>Capture helpers</strong>: <code>romp lock &lt;name&gt; -- &lt;command&gt;</code> / <code>acquireLock()</code> (one process per device; a second is refused, a dead holder's lock taken over), and <code>romp marks</code> / <code>marksFromVideo()</code> (cut points in a long recording by frame difference).</li>
+<li><code>romp/remotion</code>: <code>renderPlan(timeline)</code> gives the scenes and transitions for the config. <code>romp/pipeline</code>: <code>planSegments</code>, <code>keyOf</code>, <code>stableKey</code>, <code>cachedFile</code>, <code>hashFiles</code>, <code>stampFiles</code>, <code>montage</code>, <code>concat</code>, <code>probe</code>.</li>
+<li><code>examples/pipeline</code>: a 20-scene, 6,000-frame 4K portrait film wired for all of it (<code>romp.render.ts</code>, <code>plan.ts</code>, <code>sound.ts</code>).</li>
+<li>Docs: render settings (concurrency from <code>romp bench</code>, <code>gl: "angle"</code> for WebGL on macOS, one h264 CRF so joins stay copy-only) and how a project wires its capture tools around the lock and marks.</li>
+</ul>
 <h2 id="0-7-0-2026-11-20">[0.7.0] — 2026-11-20</h2>
 <p>A timing analysis of a real film found <code>romp check</code> slow (a 5,700-frame film took over three minutes) and missing faults that came back in review after review: empty frames between scenes, screenshots cut off by the phone they sit in, labels set too small, a heading laid on a screenshot, and words on screen nobody had tracked.</p>
 <h3 id="faster">Faster</h3>
@@ -183,6 +198,6 @@
 <li>Live demo page in <code>docs/</code> and a generated hero GIF.</li>
 </ul></div>
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.7.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.8.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>

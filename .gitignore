@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 coverage/
 out/
+examples/pipeline/.romp/
+examples/pipeline/out/
+.romp/

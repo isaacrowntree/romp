@@ -57,6 +57,39 @@ export declare function trackText(name: string, text: string, o?: TrackOptions &
     typed?: number;
     heading?: boolean;
 }): Record<string, string | undefined>;
+/**
+ * The scenes and transitions of a timeline, for `romp render --scenes`
+ * (`renderScenes` in romp/remotion/render): each scene keyed by its captions
+ * and anything else you pass in `props`, each transition declared so no cut
+ * splits it.
+ *
+ *   export default { entry: "src/index.ts", composition: "Film", out: "out/film.mp4",
+ *     ...renderPlan(film, { files: (s) => [`src/scenes/${s.name}.tsx`] }) };
+ */
+export declare function renderPlan<S extends Placement & {
+    name: string;
+    captions?: {
+        text: string;
+    }[];
+}>(film: {
+    frames: number;
+    scenes: S[];
+}, o?: {
+    files?: (scene: S) => string[];
+    media?: (scene: S) => string[];
+    props?: (scene: S) => unknown;
+}): {
+    frames: number;
+    scenes: {
+        name: string;
+        from: number;
+        frames: number;
+        files?: string[];
+        media?: string[];
+        props: unknown;
+    }[];
+    transitions: [number, number][];
+};
 /** Props for a `<Sequence>` (or a `TransitionSeries.Sequence`'s length) from a placed scene. */
 export declare function sceneSequence(scene: Placement & {
     name?: string;

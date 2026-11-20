@@ -3,6 +3,56 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.8.0] — 2026-11-20
+
+A timing analysis of a real 4K film made in code found most of the wall clock
+wasn't the check: it was full renders made only to look at the film (review
+sheets of one frame a second, each a full 4K render), full re-renders for
+one-scene fixes, and the soundtrack rendered again every round. This release
+adds the pipeline around a film: framework-free in `romp/pipeline`, with a
+thin Remotion binding in `romp/remotion/render` and CLI commands.
+
+### Added
+- **`romp sheet`**: review contact sheets straight from the composition. One
+  `renderFrames` call renders every Nth frame (default one a second) at half
+  scale as JPEGs, laid out 4×3 per page with a timestamp, frame and scene name
+  per tile (in headless Chromium: no ffmpeg font filter needed). `--scene`,
+  `--from/--to`, `--every`, `--scale`, `--cols/--rows`, `--tile`, `--out`;
+  `--still <frame>` for one full-size frame. On a 6,000-frame, 20-scene 4K portrait film: 6.7 s for 200 tiles (2.4 s for one scene), against 175 s for a full render and frame grab.
+- **`romp render`**: per-scene rendering with a cache. Segments are cut at
+  scene boundaries and never inside a transition (an overlap of two scenes,
+  or a declared span); each segment is keyed by the scenes it shows (their
+  props, own files by content, media by size and time), the rest of the
+  sources, and the render settings. Only changed segments render (muted,
+  `frameRange`, one browser), then they're joined with `ffmpeg -c copy` and
+  the soundtrack is muxed once. Writes a manifest of what was rebuilt.
+  A one-scene fix on that film: 28 s (3 of 39 segments) against 167 s for a
+  full re-render; the soundtrack's AAC is encoded once and copied in.
+- **Soundtrack cache**: `romp sound --cache dir` keys by the bundled module
+  (schedule, voices, timeline), its argument and the loudness.
+  `soundKey(schedule, opts, ...deps)` in romp/audio. 43 s → 0.2 s when unchanged.
+- **`romp lint plan.ts`**, `lintPlan()`: the plan lint. A plan is data (per
+  scene and beat: boxes, font sizes, native screen sizes, the camera); it runs
+  the frame check's layout rules with the same names and thresholds (offsafe,
+  covers, overlap, legibility after zoom, cropped, clipped, anchor,
+  occupancy) and four of its own: `fill`, `focus`, `banned`, `band`. No
+  browser; milliseconds.
+- **`romp bench`**: the fastest Remotion concurrency on this machine.
+- **`romp encode`**, `encodeArgs()`: one decode, several sizes, one ffmpeg
+  process (a 4K master and a 1080p share copy).
+- **Capture helpers**: `romp lock <name> -- <command>` / `acquireLock()` (one
+  process per device; a second is refused, a dead holder's lock taken over),
+  and `romp marks` / `marksFromVideo()` (cut points in a long recording by
+  frame difference).
+- `romp/remotion`: `renderPlan(timeline)` gives the scenes and transitions
+  for the config. `romp/pipeline`: `planSegments`, `keyOf`, `stableKey`,
+  `cachedFile`, `hashFiles`, `stampFiles`, `montage`, `concat`, `probe`.
+- `examples/pipeline`: a 20-scene, 6,000-frame 4K portrait film wired for all
+  of it (`romp.render.ts`, `plan.ts`, `sound.ts`).
+- Docs: render settings (concurrency from `romp bench`, `gl: "angle"` for
+  WebGL on macOS, one h264 CRF so joins stay copy-only) and how a project
+  wires its capture tools around the lock and marks.
+
 ## [0.7.0] — 2026-11-20
 
 A timing analysis of a real film found `romp check` slow (a 5,700-frame film
