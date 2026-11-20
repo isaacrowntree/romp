@@ -200,7 +200,7 @@ const report = await motionCanvasReport({ seek: (f) => player.playback.seek(f), 
 
 ### Text on screen: the text rules and timing helpers
 
-Captions typed into speech bubbles, headings over footage, a ring round the button being described: the motion check can't tell these from props unless you say what they are. Give a tracked object a **role** (`text`, `focus`, `prop` or `screen`) and, for text, its words and how many characters are showing, and these rules run as well:
+Captions typed into speech bubbles, headings over footage, a ring round the button being described: the motion check can't tell these from props unless you say what they are. Give a tracked object a **role** (`text`, `focus`, `prop`, `screen` or `background`) and, for text, its words and how many characters are showing, and these rules run as well:
 
 | Issue | What it means |
 |---|---|
@@ -232,7 +232,17 @@ import { trackScreen, trackText } from "romp/remotion";
 <div {...trackText(`bubble:${from}`, line, { typed, anchor: "guide", ground: 1500 })}>…</div>
 ```
 
-**What the check can't see.** It only follows `[data-romp]` elements. An untagged element is invisible, even under `--strict` (which counts untagged *tracked* objects as props), and so is anything drawn inside one `<svg>` or `<canvas>`: papers flying across a title inside a full-frame SVG pass unseen. Track each prop (SVG children take `data-romp` too). `romp check --strict` warns about every untracked `<svg>`, `<canvas>`, `<img>` or `<video>` drawn over a tracked text (after it in the document), and `untrackedOver(root)` from `romp/check` lists them for your own collector.
+**What the check can't see.** It only follows `[data-romp]` elements. An untagged element is invisible, even under `--strict` (which counts untagged *tracked* objects as props), and so is anything drawn inside one `<svg>` or `<canvas>`: papers flying across a title inside a full-frame SVG pass unseen. Track each prop (SVG children take `data-romp` too). `romp check --strict` warns about every untracked `<svg>`, `<canvas>`, `<img>` or `<video>` drawn over a tracked text or screen (after it in the document), and every run of plain text with no tracked ancestor drawn on one; `--untracked error` fails on them. `untrackedOver(root)` from `romp/check` lists them for your own collector.
+
+### Empty frames, clipped screens, small text and a tiny picture
+
+| Issue | What it means |
+|---|---|
+| `blank` | Nothing tracked is visible (or only objects with `role: "background"`) for more than 0.5 s (`blankSeconds`), outside `covered` spans: an empty frame between scenes. Runs once anything in the film has a role, or under `strict`; reported on the name `(frame)`. |
+| `clipped` | A `screen`'s content is cut by a clipping ancestor (`overflow: hidden`) by more than 1% of its in-frame box for more than 0.5 s: a screenshot taller than the phone it sits in. The DOM collector works out each sample's `clip` through its clipping ancestors (the frame itself isn't one: that's `cropped`). Sliding in through a mask is fine; a deliberate crop window takes `allowCrop`. |
+| `legibility` | Now for words too: a `text` whose smallest font-size × its on-screen scale (`fontPx`, read by the collector, or `data-romp-font-px`) is under 20 px on a 1080 short side (`textPx`) for more than 0.5 s. Tag labels and bubbles as `text`, not `screen`, to get it. |
+| `overlap` | A text on a `screen`'s content, whichever is drawn on top, for more than 0.2 s, unless the text sits on a solid panel of its own (`opaque`: an opaque background colour or image, read by the collector; `track(name, { opaque })` overrides). A heading laid over a screenshot used to pass. |
+| `occupancy` | (opt-in: `occupancy: true \| share \| { share, seconds }`, or `--occupancy`) the tracked boxes together cover less than 20% of the frame for more than 2 s: everything tiny in the middle of a big frame. `background` objects don't count. |
 
 **Remotion:** time captions with `captionTiming`, lay scenes out with `timeline`, and track the words.
 
@@ -291,13 +301,20 @@ bunx romp check check.tsx --audio public/sound/mix.wav  # both; either fails the
 ### CLI
 
 ```bash
-romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--strict] [--audio file.wav] [--json]
+romp check <entry.tsx> [--public dir] [--from s] [--to s] [--scene name] [--scenes] [--jobs n] [--every n]
+           [--arg json] [--strict] [--untracked error] [--occupancy [share]] [--no-media] [--paced] [--audio file.wav] [--json]
 romp check --audio <file.wav> [--json]
 romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]
 romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]
 ```
 
-`romp check` exits 1 on any issue (motion, text or audio). `--strict` counts every untagged tracked object as a prop for the overlap rule and runs the stale rule. `romp sound` bundles a module exporting `render(arg)` (an `AudioBuffer` or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.
+`romp check` exits 1 on any issue (motion, text or audio). `--strict` counts every untagged tracked object as a prop for the overlap rule, runs the stale rule and warns about untracked drawing surfaces and plain text over a tracked text or screen; `--untracked error` makes those warnings fail the check. `romp sound` bundles a module exporting `render(arg)` (an `AudioBuffer` or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.
+
+**Speed.** Each frame is seeked with React flushed synchronously (no waiting on animation frames), in Chromium with its frame-rate limit off, and the frames are shared across `--jobs` pages (default: half the cores, at most 8). The rows are merged in frame order and checked as one film, so rules over neighbouring frames see across shard edges. A 6,000-frame composition went from 201 s to about 7 s. `--paced` waits two animation frames per frame instead, for a film that updates itself in effects; `--no-media` skips loading video and audio files.
+
+- `--scenes` lists the film's scenes: the entry's `sections` (a timeline's `check` has them, by name), or its `scenes` cuts numbered from 1. `--scene <name|n>` checks one.
+- `--every N` reads every Nth frame and runs only the rules that read one frame's layout: cropped, offsafe, covers, overlap, legibility, anchor, clipped, blank and occupancy. pop, strobe, teleport, jump, spike, lost, unfinished, unread, empty and stale need every frame and are skipped.
+- If the page crashes, the check prints the page's latest console output and replays that stretch to name the frame it died on.
 
 ## Entry points
 

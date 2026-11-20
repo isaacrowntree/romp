@@ -3,6 +3,62 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.7.0] — 2026-11-20
+
+A timing analysis of a real film found `romp check` slow (a 5,700-frame film
+took over three minutes) and missing faults that came back in review after
+review: empty frames between scenes, screenshots cut off by the phone they sit
+in, labels set too small, a heading laid on a screenshot, and words on screen
+nobody had tracked.
+
+### Faster
+- Each frame is seeked with React flushed synchronously, instead of waiting
+  two animation frames, in Chromium with its frame-rate limit off. A synthetic
+  6,000-frame composition: 201 s → 9.2 s on one page, 6.6 s on six. The rows
+  match the paced run's exactly. `--paced` keeps the old pacing (now
+  unthrottled) for a film that updates itself in effects.
+- `--jobs N` shares frames across N pages, each in its own context (default:
+  half the cores, at most 8). Rows are merged in frame order and checked as one
+  film, so rules over neighbouring frames see across shard edges.
+- `--scenes` lists the scenes and `--scene <name|n>` checks one (about a
+  second for 300 frames): the entry's `sections`, which `timeline().check` now
+  carries by name, or its `scenes` cuts numbered from 1.
+- `--every N` reads every Nth frame and runs only the layout rules (cropped,
+  offsafe, covers, overlap, legibility, anchor, clipped, blank, occupancy):
+  6,000 frames in 2.3 s at `--every 5`. `analyze(…, { layoutOnly: true })`.
+- On a page crash, the check prints the page's latest console output, replays
+  that stretch and names the frame it died on, and exits 2.
+- `--no-media` skips loading video and audio files during a layout check.
+
+### Added
+- **`blank`**: nothing tracked is visible (or only `role: "background"`) for
+  more than 0.5 s outside `covered` spans. On once anything has a role, or
+  under `strict`.
+- **`clipped`**: a `screen` cut by a clipping ancestor (`overflow: hidden`).
+  `collectDom` now works out each sample's `clip` through its clipping
+  ancestors, not just the frame.
+- **Text size**: `legibility` now covers `role: "text"`, from its smallest
+  font-size × on-screen scale (`fontPx`, read by `collectDom`), under
+  `textPx` (20 px at a 1080 short side). Labels no longer need tagging as
+  screens.
+- **`occupancy`** (opt-in: `occupancy` option or `--occupancy [share]`): the
+  tracked boxes together cover less than 20% of the frame for more than 2 s.
+  `unionShare()`.
+- **Untracked text**: `--strict` also warns about plain text with no tracked
+  ancestor drawn on a tracked text or screen, and surfaces over a screen as
+  well as a text. `--untracked error` makes all of these `untracked` issues.
+- `role: "background"`, `track(name, { opaque })`, `data-romp-opaque`,
+  `data-romp-font-px`.
+- Demo: "Plant tiny print".
+
+### Fixed
+- `overlap` never compared a text with a `screen` drawn under it (the screen
+  counted as a backdrop), so a heading on a screenshot passed `--strict`. A
+  text on a screen's content now fails after 0.2 s, unless it has a solid panel
+  of its own (`opaque`); a screen drawn over a text fails too.
+- `spike` fired at declared scene cuts (a new scene's motion restarting): now
+  exempt, like the other speed checks.
+
 ## [0.6.0] — 2026-11-20
 
 A film passed `romp check --strict` on 0.5.0 with faults a viewer saw at once:

@@ -20,20 +20,30 @@
  * Only `[data-romp]` elements are seen: an untagged element, or a prop drawn
  * inside one `<svg>` or `<canvas>`, is invisible to the check. Track each prop
  * (an SVG child takes `data-romp` too); `untrackedOver()` finds the drawing
- * surfaces you missed.
+ * surfaces and plain text you missed.
+ *
+ * Each sample's `clip` is what clipping ancestors (overflow other than
+ * visible, inside `root`) leave of its box, when that's less than the box. A
+ * text's `fontPx` is its smallest font-size × its on-screen scale
+ * (`data-romp-font-px` overrides) and `opaque` says it has a solid background
+ * of its own (`data-romp-opaque="1"` or `"0"` overrides). `data-romp-role`
+ * also takes "background": never counted as something on screen.
  */
 import type { Sample } from "./analyze.js";
 export declare function collectDom(root?: Element): Record<string, Sample>;
 /**
- * Drawing surfaces the check can't see into: every `<svg>` (outermost),
- * `<canvas>`, `<img>` and `<video>` under `root` that isn't tracked, holds
- * nothing tracked, sits inside nothing tracked, comes after a shown tracked
- * text in the document (so it's drawn over it, unless z-index says otherwise)
- * and overlaps that text's box. Props drawn there can cross a title unseen:
- * track them. `romp check --strict` warns about each one.
+ * What `--strict` can't see, over what it checks: every `<svg>` (outermost),
+ * `<canvas>`, `<img>` and `<video>`, and every run of plain text, under `root`
+ * that isn't tracked and sits inside nothing tracked, drawn over a shown tracked
+ * text or screen: a surface after it in the document (so drawn on top, unless
+ * z-index says otherwise); text after a screen, or anywhere on a text. Props
+ * drawn in a surface can cross a title unseen, and untracked words can sit on a
+ * screen or a caption: track them. `romp check --strict` warns about each one
+ * (`--untracked error` fails on them).
  */
 export declare function untrackedOver(root: Element): {
     what: string;
     size: string;
     text: string;
+    kind: "surface" | "text";
 }[];

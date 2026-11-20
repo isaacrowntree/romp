@@ -12,7 +12,9 @@
  *   overlap     two texts overlap for more than `overlapSeconds` (0.2 s), or a
  *               prop is drawn over a text (papers, a vehicle, confetti crossing a
  *               title) for more than `propOverlapSeconds` (two frames): a fast
- *               prop over words is exactly what reads as a glitch
+ *               prop over words is exactly what reads as a glitch. A text on a
+ *               `screen`'s content (either drawn over the other) for more than
+ *               `overlapSeconds`, unless the text has an `opaque` panel of its own
  *   unfinished  a text disappears, or its scene cuts, before every character is
  *               shown: a caption cut off mid-word
  *   unread      a text is whole for less than its reading time (`readingTime()`)
@@ -36,6 +38,8 @@ export interface Margins {
     left: number;
 }
 export interface TextOptions {
+    /** sampled frames: skip the rules that need every frame (unfinished, unread, empty, stale) */
+    layoutOnly?: boolean;
     /** scene starts (cuts), seconds: a text's time on screen ends at a cut */
     scenes?: number[];
     /** untagged objects count as props for the overlap rule, and the stale rule runs */

@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.6.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.7.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -44,6 +44,32 @@
     <main id="main"><div class="shell">
 <section class="hero"><h1>Changelog</h1><p class="hero__lede">Every release, newest first. Versions follow SemVer.</p></section>
 <div class="prose changelog"><p>All notable changes to this project are documented here. Format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>; versions follow <a href="https://semver.org/">SemVer</a>.</p>
+<h2 id="0-7-0-2026-11-20">[0.7.0] — 2026-11-20</h2>
+<p>A timing analysis of a real film found <code>romp check</code> slow (a 5,700-frame film took over three minutes) and missing faults that came back in review after review: empty frames between scenes, screenshots cut off by the phone they sit in, labels set too small, a heading laid on a screenshot, and words on screen nobody had tracked.</p>
+<h3 id="faster">Faster</h3>
+<ul>
+<li>Each frame is seeked with React flushed synchronously, instead of waiting two animation frames, in Chromium with its frame-rate limit off. A synthetic 6,000-frame composition: 201 s → 9.2 s on one page, 6.6 s on six. The rows match the paced run's exactly. <code>--paced</code> keeps the old pacing (now unthrottled) for a film that updates itself in effects.</li>
+<li><code>--jobs N</code> shares frames across N pages, each in its own context (default: half the cores, at most 8). Rows are merged in frame order and checked as one film, so rules over neighbouring frames see across shard edges.</li>
+<li><code>--scenes</code> lists the scenes and <code>--scene &lt;name|n&gt;</code> checks one (about a second for 300 frames): the entry's <code>sections</code>, which <code>timeline().check</code> now carries by name, or its <code>scenes</code> cuts numbered from 1.</li>
+<li><code>--every N</code> reads every Nth frame and runs only the layout rules (cropped, offsafe, covers, overlap, legibility, anchor, clipped, blank, occupancy): 6,000 frames in 2.3 s at <code>--every 5</code>. <code>analyze(…, { layoutOnly: true })</code>.</li>
+<li>On a page crash, the check prints the page's latest console output, replays that stretch and names the frame it died on, and exits 2.</li>
+<li><code>--no-media</code> skips loading video and audio files during a layout check.</li>
+</ul>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong><code>blank</code></strong>: nothing tracked is visible (or only <code>role: "background"</code>) for more than 0.5 s outside <code>covered</code> spans. On once anything has a role, or under <code>strict</code>.</li>
+<li><strong><code>clipped</code></strong>: a <code>screen</code> cut by a clipping ancestor (<code>overflow: hidden</code>). <code>collectDom</code> now works out each sample's <code>clip</code> through its clipping ancestors, not just the frame.</li>
+<li><strong>Text size</strong>: <code>legibility</code> now covers <code>role: "text"</code>, from its smallest font-size × on-screen scale (<code>fontPx</code>, read by <code>collectDom</code>), under <code>textPx</code> (20 px at a 1080 short side). Labels no longer need tagging as screens.</li>
+<li><strong><code>occupancy</code></strong> (opt-in: <code>occupancy</code> option or <code>--occupancy [share]</code>): the tracked boxes together cover less than 20% of the frame for more than 2 s. <code>unionShare()</code>.</li>
+<li><strong>Untracked text</strong>: <code>--strict</code> also warns about plain text with no tracked ancestor drawn on a tracked text or screen, and surfaces over a screen as well as a text. <code>--untracked error</code> makes all of these <code>untracked</code> issues.</li>
+<li><code>role: "background"</code>, <code>track(name, { opaque })</code>, <code>data-romp-opaque</code>, <code>data-romp-font-px</code>.</li>
+<li>Demo: "Plant tiny print".</li>
+</ul>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li><code>overlap</code> never compared a text with a <code>screen</code> drawn under it (the screen counted as a backdrop), so a heading on a screenshot passed <code>--strict</code>. A text on a screen's content now fails after 0.2 s, unless it has a solid panel of its own (<code>opaque</code>); a screen drawn over a text fails too.</li>
+<li><code>spike</code> fired at declared scene cuts (a new scene's motion restarting): now exempt, like the other speed checks.</li>
+</ul>
 <h2 id="0-6-0-2026-11-20">[0.6.0] — 2026-11-20</h2>
 <p>A film passed <code>romp check --strict</code> on 0.5.0 with faults a viewer saw at once: an app screenshot drawn too small to read, a vehicle and papers crossing a title, a phone mock 2% off the frame's edge, and a speech bubble that appeared below its ground line and snapped up to it. Why each got through, and what catches it now:</p>
 <ul>
@@ -157,6 +183,6 @@
 <li>Live demo page in <code>docs/</code> and a generated hero GIF.</li>
 </ul></div>
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.6.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.7.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>

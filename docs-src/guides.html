@@ -188,14 +188,23 @@ const { issues } = motionReport({ seek, scene, camera, fps: 30, W: 886, H: 1920,
 <h3>Anything else</h3>
 <p>Build <code>{ f, row: { name: { x, y, shown, onScreen, area, opacity, box? } } }</code> per frame and call <code>analyze(frames, { fps, width, height })</code>; <code>formatReport()</code> prints it.</p>
 <h3>The CLI</h3>
-<pre><code>romp check &lt;entry.tsx&gt; [--public dir] [--from s] [--to s] [--arg json] [--strict] [--audio file.wav] [--json]
+<pre><code>romp check &lt;entry.tsx&gt; [--public dir] [--from s] [--to s] [--scene name] [--scenes] [--jobs n] [--every n]
+           [--arg json] [--strict] [--untracked error] [--occupancy [share]] [--no-media] [--paced] [--audio file.wav] [--json]
 romp check --audio &lt;file.wav&gt; [--json]
 romp check --lottie &lt;anim.json&gt; [--layers a,b] [--from s] [--to s] [--json]
 romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16]</code></pre>
-<p><code>romp check</code> bundles the entry with esbuild, plays it in headless Chromium with <code>@remotion/player</code> and seeks every frame. It exits 1 on any issue, motion, text or audio; <code>--strict</code> counts untagged tracked objects as props for the overlap rule, runs the stale rule and warns about untracked drawing surfaces over a text. <code>romp sound</code> bundles a module exporting <code>render(arg)</code> (an <code>AudioBuffer</code> or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.</p>
+<p><code>romp check</code> bundles the entry with esbuild, plays it in headless Chromium with <code>@remotion/player</code> and seeks every frame. It exits 1 on any issue, motion, text or audio; <code>--strict</code> counts untagged tracked objects as props for the overlap rule, runs the stale rule and warns about untracked drawing surfaces and plain text over a tracked text or screen (<code>--untracked error</code> fails on them). <code>romp sound</code> bundles a module exporting <code>render(arg)</code> (an <code>AudioBuffer</code> or a base64 WAV), renders it in headless Chromium and loudness-normalises it with ffmpeg when it's on your PATH.</p>
+
+<h3>Speed, scenes and sampling</h3>
+<p>Each frame is seeked with React flushed synchronously, not paced on animation frames, in Chromium with its frame-rate limit off, and frames are shared across <code>--jobs</code> pages (default: half the cores, at most 8). The rows are merged in frame order and checked as one film, so rules over neighbouring frames see across shard edges. A 6,000-frame composition went from 201&nbsp;s to about 7&nbsp;s. <code>--paced</code> waits two animation frames per frame, for a film that updates itself in effects; <code>--no-media</code> skips loading video and audio.</p>
+<ul>
+  <li><code>--scenes</code> lists the scenes: the entry's <code>sections</code> (a timeline's <code>check</code> carries them by name), or its <code>scenes</code> cuts numbered from 1. <code>--scene &lt;name|n&gt;</code> checks one.</li>
+  <li><code>--every N</code> reads every Nth frame and runs only the layout rules: cropped, offsafe, covers, overlap, legibility, anchor, clipped, blank and occupancy. pop, strobe, teleport, jump, spike, lost, unfinished, unread, empty and stale need every frame and are skipped.</li>
+  <li>If the page crashes, the check prints its latest console output and replays that stretch to name the frame it died on.</li>
+</ul>
 
 <h2 id="text">Text on screen: the text rules and timing</h2>
-<p>Captions typed into speech bubbles, headings over footage, a ring round the button being described: the check can't tell these from props unless you say what they are. Give a tracked object a <strong>role</strong> (<code>text</code>, <code>focus</code>, <code>prop</code> or <code>screen</code>) and, for text, its words and how many characters are showing, and these rules run as well. They're on by default for anything with a role, so a film that tags nothing sees no change.</p>
+<p>Captions typed into speech bubbles, headings over footage, a ring round the button being described: the check can't tell these from props unless you say what they are. Give a tracked object a <strong>role</strong> (<code>text</code>, <code>focus</code>, <code>prop</code>, <code>screen</code> or <code>background</code>) and, for text, its words and how many characters are showing, and these rules run as well. They're on by default for anything with a role, so a film that tags nothing sees no change.</p>
 <table>
   <thead><tr><th>Issue</th><th>What it means</th></tr></thead>
   <tbody>
@@ -222,7 +231,18 @@ romp sound &lt;module.ts&gt; --out file.wav [--arg json] [--lufs -16]</code></pr
 </table>
 <pre><code>&lt;Img src={shot} {...trackScreen("app", 390)} style={{ width: 640 }} /&gt;     // 390: the phone's CSS width
 &lt;div {...trackText(`bubble:${from}`, line, { typed, anchor: "guide", ground: 1500 })}&gt;…&lt;/div&gt;</code></pre>
-<p><strong>What the check can't see.</strong> Only <code>[data-romp]</code> elements are followed. An untagged element is invisible, even under <code>--strict</code>, and so is anything drawn inside one <code>&lt;svg&gt;</code> or <code>&lt;canvas&gt;</code>. Track each prop (SVG children take <code>data-romp</code> too). <code>romp check --strict</code> warns about every untracked <code>&lt;svg&gt;</code>, <code>&lt;canvas&gt;</code>, <code>&lt;img&gt;</code> or <code>&lt;video&gt;</code> drawn over a tracked text; <code>untrackedOver(root)</code> lists them for your own collector. The demo's “Plant a snap” box makes its caption type in low and jump up.</p>
+<h3>Empty frames, clipped screens, small text and a tiny picture</h3>
+<table>
+  <thead><tr><th>Issue</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td>blank</td><td>Nothing tracked is visible (or only <code>role: "background"</code>) for more than 0.5&nbsp;s (<code>blankSeconds</code>), outside <code>covered</code> spans: an empty frame between scenes. Runs once anything has a role, or under <code>strict</code>.</td></tr>
+    <tr><td>clipped</td><td>A <code>screen</code>'s content is cut by a clipping ancestor (<code>overflow: hidden</code>) by more than 1% for more than 0.5&nbsp;s: a screenshot taller than its phone. The collector works out each sample's <code>clip</code> through its clipping ancestors. A deliberate crop window takes <code>allowCrop</code>.</td></tr>
+    <tr><td>legibility</td><td>Now for words too: a <code>text</code> whose smallest font-size × on-screen scale (<code>fontPx</code>) is under 20&nbsp;px on a 1080 short side (<code>textPx</code>) for more than 0.5&nbsp;s. Tag labels and bubbles as <code>text</code>, not <code>screen</code>.</td></tr>
+    <tr><td>overlap</td><td>A text on a <code>screen</code>'s content, whichever is on top, for more than 0.2&nbsp;s, unless the text has a solid panel of its own (<code>opaque</code>, read from its background; <code>track(name, { opaque })</code> overrides).</td></tr>
+    <tr><td>occupancy</td><td>Opt-in (<code>occupancy: true | share | { share, seconds }</code>, or <code>--occupancy</code>): the tracked boxes together cover less than 20% of the frame for more than 2&nbsp;s. <code>background</code> objects don't count.</td></tr>
+  </tbody>
+</table>
+<p><strong>What the check can't see.</strong> Only <code>[data-romp]</code> elements are followed. An untagged element is invisible, even under <code>--strict</code>, and so is anything drawn inside one <code>&lt;svg&gt;</code> or <code>&lt;canvas&gt;</code>. Track each prop (SVG children take <code>data-romp</code> too). <code>romp check --strict</code> warns about every untracked <code>&lt;svg&gt;</code>, <code>&lt;canvas&gt;</code>, <code>&lt;img&gt;</code> or <code>&lt;video&gt;</code> drawn over a tracked text or screen, and every run of plain text on one (<code>--untracked error</code> fails on them); <code>untrackedOver(root)</code> lists them for your own collector. The demo's “Plant a snap” box makes its caption type in low and jump up, and “Plant tiny print” adds a label too small to read.</p>
 <h3>Timing that passes by construction</h3>
 <p><code>captionTiming(text, { cps: 30 })</code> types a caption at 30 characters a second, then holds it whole for its reading time: <code>{ typeFrames, holdFrames, totalFrames, typed(frame) }</code>. <code>timeline(scenes, { transition: 0.5, actSeconds: 1.2 })</code> lays out a film from its scenes: each lasts at least as long as its captions need, the transitions at both ends are added on, so a transition never lands on a caption's reading window, and an act card is 1.2&nbsp;s unless you say otherwise. It hands back the <code>covered</code> spans and scene cuts the check wants.</p>
 <pre><code>import { captionTiming, timeline, trackText, track, sceneSequence } from "romp/remotion";

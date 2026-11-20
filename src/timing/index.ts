@@ -142,8 +142,8 @@ export interface Timeline<S extends SceneSpec = SceneSpec> {
   /** the film's length in frames */
   frames: number;
   scenes: (S & Placement)[];
-  /** for the check: transitions as covered spans (seconds), and every scene start as a cut */
-  check: { covered: [number, number][]; scenes: number[] };
+  /** for the check: transitions as covered spans (seconds), every scene start as a cut, and each scene by name (`romp check --scene`) */
+  check: { covered: [number, number][]; scenes: number[]; sections: { name: string; from: number; to: number }[] };
 }
 
 /**
@@ -185,6 +185,7 @@ export function timeline<S extends SceneSpec>(specs: S[], o: TimelineOptions = {
     check: {
       covered: scenes.filter((s) => s.transitionIn > 0).map((s) => [s.start / fps, (s.start + s.transitionIn) / fps] as [number, number]),
       scenes: scenes.slice(1).map((s) => s.start / fps),
+      sections: scenes.map((s) => ({ name: s.name, from: s.start / fps, to: (s.start + s.frames) / fps })),
     },
   };
 }

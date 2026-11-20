@@ -28,6 +28,8 @@ export interface TrackOptions {
     anchor?: string;
     /** text: a ground line (y in frame px) no part of it may show below */
     ground?: number;
+    /** text: it sits on a solid panel of its own (read from its background when not given) */
+    opaque?: boolean;
 }
 /** Data attributes for the motion check: spread them on the element to track. */
 export declare function track(name: string, o?: TrackOptions): Record<string, string | undefined>;
@@ -100,4 +102,10 @@ export interface CheckEntry extends Omit<AnalyzeOptions, "fps" | "width" | "heig
     allowCrop?: string[];
     /** names allowed to leave the frame for good (or `track(name, { allowExit: true })`) */
     allowExit?: string[];
+    /** named spans of the film, seconds, for `romp check --scene <name>` (a timeline's `check` has them) */
+    sections?: {
+        name: string;
+        from: number;
+        to: number;
+    }[];
 }

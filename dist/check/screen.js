@@ -13,6 +13,7 @@ export function screenIssues(frames, names, o, fps, hidden) {
     // ── legibility ──────────────────────────────────────────────────────────────
     const minPx = o.legiblePx ?? (20 * short) / 1080;
     const legRun = Math.round((o.legibleSeconds ?? 0.5) * fps);
+    const textMin = o.textPx ?? minPx;
     for (const name of names) {
         if (allowed("legibility", name))
             continue;
@@ -24,6 +25,11 @@ export function screenIssues(frames, names, o, fps, hidden) {
                 const moving = Math.abs(r[r.length - 1].px - r[0].px) > 0.5;
                 if (!(moving && (rising || falling))) {
                     const worst = r.reduce((a, b) => (b.px < a.px ? b : a));
+                    if (worst.words) {
+                        out.push({ frame: r[0].f, name, kind: "legibility", detail: `its text renders at ${worst.px.toFixed(1)} px, under ${Math.round(textMin)} px, for ${s1(r.length / fps)}: set it bigger` });
+                        r = [];
+                        return;
+                    }
                     out.push({
                         frame: r[0].f,
                         name,
@@ -36,6 +42,13 @@ export function screenIssues(frames, names, o, fps, hidden) {
         };
         for (const { f, row } of frames) {
             const p = row[name];
+            if (visible(p) && p.role === "text" && p.fontPx != null && p.opacity >= 0.5 && !hidden(f) && (!p.chars || p.chars.shown > 0)) {
+                if (p.fontPx < textMin)
+                    r.push({ f, px: p.fontPx, scale: 1, text: p.fontPx, native: 0, words: true });
+                else
+                    flush();
+                continue;
+            }
             if (!visible(p) || p.role !== "screen" || !p.native?.width || p.opacity < 0.5 || hidden(f)) {
                 flush();
                 continue;

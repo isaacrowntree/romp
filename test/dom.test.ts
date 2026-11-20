@@ -69,3 +69,44 @@ describe("untrackedOver: what --strict can't see", () => {
     root.remove();
   });
 });
+
+describe("collectDom: clipping, text size and panels", () => {
+  it("reads what a clipping ancestor leaves of a screen, a text's font size and its panel", () => {
+    const root = document.createElement("div");
+    root.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1080, height: 1920, right: 1080, bottom: 1920, x: 0, y: 0, toJSON() {} }) as DOMRect;
+    const phone = el({}, [300, 400, 480, 900]);
+    phone.style.overflow = "hidden";
+    phone.append(el(trackScreen("app", 390), [300, 400, 480, 1040]));
+    const label = el(trackText("label", "Tiny words"), [100, 100, 300, 30], "Tiny words");
+    label.style.fontSize = "14px";
+    const panel = el(trackText("panel", "On a panel"), [100, 200, 300, 60], "On a panel");
+    panel.style.backgroundColor = "rgb(255, 255, 255)";
+    const glass = el(trackText("glass", "On glass", { opaque: false }), [100, 300, 300, 60], "On glass");
+    glass.style.backgroundColor = "rgb(255, 255, 255)";
+    root.append(phone, label, panel, glass);
+    document.body.append(root);
+    const row = collectDom(root);
+    expect(row.app.clip).toEqual({ x0: 300, y0: 400, x1: 780, y1: 1300 });
+    expect(row.label.fontPx).toBe(14);
+    expect(row.label.opaque).toBe(false);
+    expect(row.panel.opaque).toBe(true);
+    expect(row.glass.opaque).toBe(false);
+    root.remove();
+  });
+});
+
+describe("untrackedOver: plain text", () => {
+  it("finds untracked words on a screen or a caption, not elsewhere", () => {
+    const root = document.createElement("div");
+    root.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1080, height: 1920, right: 1080, bottom: 1920, x: 0, y: 0, toJSON() {} }) as DOMRect;
+    const app = el(trackScreen("app", 390), [100, 300, 880, 1400]);
+    const heading = el({}, [140, 360, 800, 140], "Book in one tap", "h2");
+    const footer = el({}, [100, 1800, 880, 60], "Made with care", "p");
+    root.append(app, heading, footer);
+    document.body.append(root);
+    const found = untrackedOver(root);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ kind: "text", what: 'text "Book in one tap"', text: "app" });
+    root.remove();
+  });
+});

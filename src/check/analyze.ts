@@ -42,7 +42,14 @@
  * Text rules (text.ts) run over samples that carry a `role`: words a viewer has
  * to read (`text`), the thing being talked about (`focus`) and everything else
  * that moves (`prop`): offsafe, covers, overlap, unfinished, unread, empty and
- * (opt-in) stale. Screens and anchors are in screen.ts.
+ * (opt-in) stale. Screens, text size and anchors are in screen.ts; blank,
+ * clipped and occupancy in layout.ts.
+ *
+ * `layoutOnly` (sampled frames, `romp check --every N`): only the rules that
+ * read one frame's layout run (cropped, offsafe, covers, overlap, legibility,
+ * anchor, clipped, blank, occupancy); the motion rules and the timing text rules
+ * (pop, strobe, teleport, jump, spike, lost, unfinished, unread, empty, stale)
+ * need every frame and are skipped.
  *
  * It only reads positions, so it works for anything you can seek: a realtime
  * page's seek(t), a frame renderer, three.js or the DOM (see collectDom and
@@ -50,9 +57,10 @@
  */
 import { textIssues, type TextOptions } from "./text.js";
 import { screenIssues, type ScreenOptions } from "./screen.js";
+import { layoutIssues, type LayoutOptions } from "./layout.js";
 
 /** What a tracked object is, for the text rules. */
-export type Role = "text" | "focus" | "prop" | "screen";
+export type Role = "text" | "focus" | "prop" | "screen" | "background";
 
 export interface Sample {
   /** on-screen centre, px */
@@ -100,11 +108,17 @@ export interface Sample {
   anchor?: string;
   /** text: a ground line, y in frame px; no part of it may show below */
   ground?: number;
+  /** text: its smallest text as rendered, px (font-size × on-screen scale) */
+  fontPx?: number;
+  /** what's left of its box after clipping ancestors (overflow: hidden), frame px; absent: not clipped */
+  clip?: { x0: number; y0: number; x1: number; y1: number };
+  /** text: it sits on a solid panel of its own (an opaque background) */
+  opaque?: boolean;
 }
 
 /** The text rules. */
-export type TextKind = "offsafe" | "covers" | "overlap" | "unfinished" | "unread" | "empty" | "stale" | "legibility" | "anchor";
-export type IssueKind = "pop" | "strobe" | "teleport" | "jump" | "spike" | "cropped" | "lost" | TextKind;
+export type TextKind = "offsafe" | "covers" | "overlap" | "unfinished" | "unread" | "empty" | "stale" | "legibility" | "anchor" | "clipped" | "blank" | "occupancy";
+export type IssueKind = "pop" | "strobe" | "teleport" | "jump" | "spike" | "cropped" | "lost" | "untracked" | TextKind;
 
 export interface FrameRow {
   f: number;
@@ -118,7 +132,9 @@ export interface Issue {
   detail: string;
 }
 
-export interface AnalyzeOptions extends TextOptions, ScreenOptions {
+export interface AnalyzeOptions extends TextOptions, ScreenOptions, LayoutOptions {
+  /** sampled frames: run only the rules that read one frame's layout */
+  layoutOnly?: boolean;
   fps?: number;
   /** frame width in px: thresholds scale from 886 px unless given */
   width?: number;
@@ -172,7 +188,7 @@ export function analyze(frames: FrameRow[], o: AnalyzeOptions = {}): Report {
   const blank: Sample = { x: 0, y: 0, shown: false, onScreen: false, area: 0, opacity: 0 };
   const issues: Issue[] = [];
 
-  for (const name of names) {
+  for (const name of o.layoutOnly ? [] : names) {
     const s = frames.map(({ f, row }) => ({ f, ...(row[name] ?? blank) }));
     const maxArea = Math.max(...s.map((p) => p.area));
     const impacts = new Set((o.impacts?.[name] ?? []).map(Math.round));
@@ -210,14 +226,15 @@ export function analyze(frames: FrameRow[], o: AnalyzeOptions = {}): Report {
       const fading = b.opacity < a.opacity - 0.01 || a.opacity < 0.99;
       const near = s.slice(Math.max(0, i - 2), i + 2).filter((p) => p.shown);
       const sizing = near.some((p, k) => k > 0 && Math.abs(p.area - near[k - 1].area) > 0.02 * Math.max(p.area, near[k - 1].area));
-      if (ai == null || ai < 6 * scale || fading || sizing || isImpact(i)) continue;
+      const nearCut = cutAt.has(b.f) || cutAt.has(b.f + 1) || cutAt.has(a.f);
+      if (ai == null || ai < 6 * scale || fading || sizing || nearCut || isImpact(i)) continue;
       const around = acc.slice(Math.max(0, i - 4), i - 1).concat(acc.slice(i + 2, i + 5)).filter((x): x is number => x != null);
       const typical = around.length ? around.sort((x, y) => x - y)[Math.floor(around.length / 2)] : 0;
       if (ai > 3 * typical + 4 * scale) issues.push({ frame: b.f, name, kind: "spike", detail: `accel ${ai.toFixed(1)} px/f² vs ~${typical.toFixed(1)} around it` });
     }
   }
-  if (o.width && o.height) issues.push(...cropped(frames, names, o, fps, hidden), ...lost(frames, names, o, fps, hidden));
-  issues.push(...textIssues(frames, names, o, fps, hidden), ...screenIssues(frames, names, o, fps, hidden));
+  if (o.width && o.height) issues.push(...cropped(frames, names, o, fps, hidden), ...(o.layoutOnly ? [] : lost(frames, names, o, fps, hidden)));
+  issues.push(...textIssues(frames, names, o, fps, hidden), ...screenIssues(frames, names, o, fps, hidden), ...layoutIssues(frames, names, o, fps, hidden));
   issues.sort((a, b) => a.frame - b.frame);
   return { tracked: names, frames: frames.length, issues };
 }

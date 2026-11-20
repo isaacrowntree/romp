@@ -9,7 +9,10 @@
  *               A phone mock a third of a portrait frame wide, a whole desktop
  *               page in a browser frame. Zooming in or out (its size only rises,
  *               or only falls) is fine; so is a screen zoomed or cropped to the
- *               part that matters
+ *               part that matters. A `text` with its rendered `fontPx` (the
+ *               DOM collector reads font-size × on-screen scale) under
+ *               `textPx` (the same 20 px at a 1080 short side) fails the same way:
+ *               a label or bubble set too small
  *   anchor      a text with an `anchor` (the tracked object it belongs to: a
  *               speech bubble's speaker) is more than `anchorPx` (10% of the
  *               short side) from that object's box for more than
@@ -25,6 +28,8 @@ export interface ScreenOptions {
   legiblePx?: number;
   /** legibility: a screen's body text in native px when the sample doesn't say (default 16) */
   minTextPx?: number;
+  /** legibility: the smallest rendered size for a `text` (default: `legiblePx`) */
+  textPx?: number;
   /** legibility: how long a screen may stay too small (default 0.5 s) */
   legibleSeconds?: number;
   /** anchor: how far a text may sit from its anchor's box, px (default 10% of the short side) */
@@ -54,9 +59,10 @@ export function screenIssues(frames: FrameRow[], names: string[], o: ScreenOptio
   // ── legibility ──────────────────────────────────────────────────────────────
   const minPx = o.legiblePx ?? (20 * short) / 1080;
   const legRun = Math.round((o.legibleSeconds ?? 0.5) * fps);
+  const textMin = o.textPx ?? minPx;
   for (const name of names) {
     if (allowed("legibility", name)) continue;
-    let r: { f: number; px: number; scale: number; text: number; native: number }[] = [];
+    let r: { f: number; px: number; scale: number; text: number; native: number; words?: boolean }[] = [];
     const flush = () => {
       if (r.length > legRun) {
         const rising = r.every((p, k) => k === 0 || p.px >= r[k - 1].px - 0.05);
@@ -64,6 +70,11 @@ export function screenIssues(frames: FrameRow[], names: string[], o: ScreenOptio
         const moving = Math.abs(r[r.length - 1].px - r[0].px) > 0.5;
         if (!(moving && (rising || falling))) {
           const worst = r.reduce((a, b) => (b.px < a.px ? b : a));
+          if (worst.words) {
+            out.push({ frame: r[0].f, name, kind: "legibility", detail: `its text renders at ${worst.px.toFixed(1)} px, under ${Math.round(textMin)} px, for ${s1(r.length / fps)}: set it bigger` });
+            r = [];
+            return;
+          }
           out.push({
             frame: r[0].f,
             name,
@@ -76,6 +87,11 @@ export function screenIssues(frames: FrameRow[], names: string[], o: ScreenOptio
     };
     for (const { f, row } of frames) {
       const p = row[name];
+      if (visible(p) && p.role === "text" && p.fontPx != null && p.opacity >= 0.5 && !hidden(f) && (!p.chars || p.chars.shown > 0)) {
+        if (p.fontPx < textMin) r.push({ f, px: p.fontPx, scale: 1, text: p.fontPx, native: 0, words: true });
+        else flush();
+        continue;
+      }
       if (!visible(p) || p.role !== "screen" || !p.native?.width || p.opacity < 0.5 || hidden(f)) {
         flush();
         continue;

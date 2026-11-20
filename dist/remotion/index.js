@@ -23,6 +23,7 @@ export function track(name, o = {}) {
         "data-romp-z": o.z != null ? String(o.z) : undefined,
         "data-romp-anchor": o.anchor,
         "data-romp-ground": o.ground != null ? String(o.ground) : undefined,
+        "data-romp-opaque": o.opaque == null ? undefined : o.opaque ? "1" : "0",
     };
 }
 /**

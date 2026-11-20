@@ -153,6 +153,7 @@ export function mount(root: HTMLElement) {
 .romp-demo .rd-who>i{position:absolute;display:block}
 .romp-demo .rd-fx>i{display:block}
 .romp-demo .rd-burst{position:absolute;pointer-events:none}
+.romp-demo .rd-tiny{position:absolute;left:60px;top:440px;color:var(--rd-fg);font:400 8px/1.2 var(--font-sans,system-ui);white-space:pre}
 .romp-demo .rd-cap{position:absolute;left:60px;top:28px;padding:6px 14px;border-radius:12px;background:var(--rd-raised);border:1px solid var(--rd-line);color:var(--rd-fg);font:600 22px/1.3 var(--font-sans,system-ui);white-space:pre}
 .romp-demo .rd-bug{position:absolute;left:0;top:0;width:150px;height:46px;border-radius:23px;background:#FDE68A;color:#1A1730;font:700 18px/46px var(--font-sans,system-ui);text-align:center;transform-origin:50% 50%}
 .romp-demo .rd-controls{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin:.9rem 0 .6rem}
@@ -172,6 +173,7 @@ export function mount(root: HTMLElement) {
   ${[...CAST, ZIP].map((c) => `<div class="rd-who" data-romp="${c.id}">${character(c)}</div>`).join("")}
   <div class="rd-fx" aria-hidden="true">${"<i></i>".repeat(SPARKS)}</div><div class="rd-burst" data-romp="sparks"></div>
   <div class="rd-bug" data-romp="sticker">new!</div>
+  <div class="rd-tiny" data-romp="tiny" data-romp-role="text">Terms and conditions apply</div>
   <div class="rd-cap" data-romp="caption" data-romp-role="text" data-romp-text="${CAPTION}" data-romp-chars-total="${CAP.chars}"></div>
 </div></div>
 <div class="rd-controls">
@@ -184,6 +186,7 @@ export function mount(root: HTMLElement) {
   <label class="rd-check"><input type="checkbox" data-act="bug"> Plant a bug (a sticker that pops in)</label>
   <label class="rd-check"><input type="checkbox" data-act="textbug"> Plant a text bug (the caption cut off mid-word)</label>
   <label class="rd-check"><input type="checkbox" data-act="snap"> Plant a snap (the caption types in low, then jumps up)</label>
+  <label class="rd-check"><input type="checkbox" data-act="tiny"> Plant tiny print (a label too small to read)</label>
   <button type="button" class="btn btn-outline-primary" data-act="wav">Render WAV offline</button>
 </div>
 <pre aria-live="polite">The motion check report shows here.</pre>`;
@@ -196,6 +199,8 @@ export function mount(root: HTMLElement) {
   const bugBox = root.querySelector<HTMLInputElement>('[data-act="bug"]')!;
   const textBugBox = root.querySelector<HTMLInputElement>('[data-act="textbug"]')!;
   const snapBox = root.querySelector<HTMLInputElement>('[data-act="snap"]')!;
+  const tinyBox = root.querySelector<HTMLInputElement>('[data-act="tiny"]')!;
+  const tinyEl = root.querySelector<HTMLElement>(".rd-tiny")!;
   const capEl = root.querySelector<HTMLElement>(".rd-cap")!;
   const letterEls = LETTERS.map((ch) => root.querySelector<HTMLElement>(`[data-romp="letter:${ch}"]`)!);
   const whoEls = [...CAST, ZIP].map((c) => root.querySelector<HTMLElement>(`[data-romp="${c.id}"]`)!);
@@ -283,6 +288,9 @@ export function mount(root: HTMLElement) {
     capEl.dataset.rompCharsShown = String(typed);
     // The snap: it starts 60 px below its place and jumps up a third of a second in.
     capEl.style.transform = snapBox.checked && on && cf < 10 ? "translateY(60px)" : "";
+    // Tiny print: a label in the corner, 8 px on an 800 px stage (the text-size check wants 20 px at 1080).
+    tinyEl.style.display = tinyBox.checked && f >= 60 && f < 180 ? "" : "none";
+    tinyEl.style.opacity = String(Math.max(0, Math.min(1, (f - 60) / 6, (180 - f) / 6)));
     capEl.style.opacity = String(textBugBox.checked && on ? Math.min(1, (cf + 1) / 4) : Math.max(0, Math.min(1, (cf + 1) / 4, (end - cf) / CAP.exitFrames)));
     scrub.value = String(t);
     time.textContent = `${t.toFixed(1)} s`;
@@ -359,11 +367,11 @@ export function mount(root: HTMLElement) {
     report.textContent =
       formatReport(r, FPS) +
       (r.issues.length
-        ? "\n\nUntick the planted bugs and run it again: the sticker then grows in, the caption finishes, stays up long enough to read and types in where it stays, and the check passes."
+        ? "\n\nUntick the planted bugs and run it again: the sticker then grows in, the caption finishes, stays up long enough to read and types in where it stays, the tiny print goes, and the check passes."
         : "\n\nNo pops, strobes, teleports, spikes or crops. The sharp turns are real impacts, marked as such; the character that flies in from off-frame is entering, so its partial crop is fine; and the sparks are checked as one burst that grows in and fades out. The caption is tracked as text: it types in, stays whole for its reading time and sits inside the safe area. Tick a “Plant a bug” box to watch it catch one.");
   };
 
-  bugBox.onchange = textBugBox.onchange = snapBox.onchange = () => seek(clock.t);
+  bugBox.onchange = textBugBox.onchange = snapBox.onchange = tinyBox.onchange = () => seek(clock.t);
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches ? 6.5 : 0;
   seek(still);
   return { seek, clock, schedule, stage };

@@ -88,6 +88,7 @@ export function timeline(specs, o = {}) {
         check: {
             covered: scenes.filter((s) => s.transitionIn > 0).map((s) => [s.start / fps, (s.start + s.transitionIn) / fps]),
             scenes: scenes.slice(1).map((s) => s.start / fps),
+            sections: scenes.map((s) => ({ name: s.name, from: s.start / fps, to: (s.start + s.frames) / fps })),
         },
     };
 }

@@ -75,10 +75,15 @@ describe("timeline", () => {
     expect(tl.frames).toBe(end.start + end.frames);
     expect(tl.check.covered[0]).toEqual([act.start / FPS, (act.start + 15) / FPS]);
     expect(tl.check.scenes).toHaveLength(4);
+    // Each scene by name, for `romp check --scene`: back to back, covering the film.
+    expect(tl.check.sections.map((x) => x.name)).toEqual(tl.scenes.map((x) => x.name));
+    expect(tl.check.sections[0].from).toBe(0);
+    expect(tl.check.sections[tl.check.sections.length - 1].to).toBe(tl.frames / FPS);
   });
   it("passes the text rules by construction", () => {
     const r = analyze(render(tl), { fps: FPS, width: 1080, height: 1920, ...tl.check });
-    expect(r.issues.filter((i) => i.kind !== "pop")).toEqual([]);
+    // The fixture draws only captions, so its caption-less scenes are blank frames by design.
+    expect(r.issues.filter((i) => i.kind !== "pop" && i.kind !== "blank")).toEqual([]);
   });
   it("planted bug: a scene cut short fails the check", () => {
     // The same captions squeezed into a fixed 2 s scene: the second one can't finish.

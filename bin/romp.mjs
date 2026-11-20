@@ -9,6 +9,13 @@
 //     drawn over a text (the check can't see inside them). Exit 1 on issues. The entry default-exports
 //     { component, props?, durationInFrames, fps, width, height, whips?, covered?,
 //       …any analyze() option }.
+//     --jobs N         pages to shard frames across (default: half the cores, ≤ 8)
+//     --scene <name|n> one scene (the entry's `sections`, or its `scenes` cuts numbered from 1); --scenes lists them
+//     --every N        every Nth frame: layout rules only (fast; motion rules need every frame)
+//     --untracked error  untracked text or drawing surfaces over a text or screen fail the check (else warnings)
+//     --occupancy [share]  the opt-in occupancy rule
+//     --paced          wait two animation frames per frame instead of flushing React synchronously
+//     --no-media       don't load video or audio files (layout only)
 //   romp check --audio <file.wav>
 //     The audio check alone: dropouts (0.1–1 s of near-silence inside the bed).
 //     With an entry as well, both run and either fails the command.
@@ -61,7 +68,7 @@ const flag = (name, def) => {
 };
 const audioOnly = cmd === "check" && audioFile && (!file || file.startsWith("--"));
 if (!cmd || (!file && !audioOnly) || cmd === "--help") {
-  console.log("usage:\n  romp check <entry.tsx> [--public dir] [--from s] [--to s] [--arg json] [--strict] [--audio file.wav] [--json]\n  romp check --audio <file.wav> [--json]\n  romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]\n  romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]");
+  console.log("usage:\n  romp check <entry.tsx> [--public dir] [--from s] [--to s] [--scene name] [--scenes] [--jobs n] [--every n] [--arg json] [--strict] [--untracked error] [--occupancy [share]] [--no-media] [--paced] [--audio file.wav] [--json]\n  romp check --audio <file.wav> [--json]\n  romp check --lottie <anim.json> [--layers a,b] [--from s] [--to s] [--json]\n  romp sound <module.ts> --out file.wav [--arg json] [--lufs -16]");
   process.exit(cmd ? 0 : 1);
 }
 
@@ -136,9 +143,12 @@ function serve(js, publicDir) {
   return new Promise((res) => server.listen(0, "127.0.0.1", () => res(server)));
 }
 
-if (cmd === "check") {
+/** Chromium with the frame-rate limit off: requestAnimationFrame isn't held to 60 Hz. */
+const launch = () => chromium.launch({ args: ["--disable-frame-rate-limit", "--disable-gpu-vsync"] });
+
+if (cmd === "check" && lottieFile) {
   const entry = path.resolve(file);
-  const js = lottieFile ? await bundle(
+  const js = await bundle(
     `import lottie from "lottie-web";
 import { lottieReport } from ${JSON.stringify(path.join(dist, "lottie/index.js"))};
 import data from ${JSON.stringify(entry)};
@@ -152,12 +162,34 @@ window.__rompRun = async (from, to) => {
   return lottieReport(anim, { from, to, layers: layers ?? undefined });
 };`,
     "lottie",
-  ) : await bundle(
+  );
+  const server = await serve(js, null);
+  const browser = await launch();
+  const page = await browser.newPage({ viewport: { width: 1080, height: 1920 } });
+  page.on("pageerror", (e) => console.error("page error:", e.message));
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.waitForFunction(() => window.__rompMeta);
+  const meta = await page.evaluate(() => window.__rompMeta);
+  await page.setViewportSize({ width: meta.width, height: meta.height });
+  const from = Math.round(+flag("from", 0) * meta.fps), to = Math.min(meta.durationInFrames - 1, Math.round(+flag("to", meta.durationInFrames / meta.fps) * meta.fps));
+  const report = await page.evaluate(([a, b]) => window.__rompRun(a, b), [from, to]);
+  await browser.close();
+  server.close();
+  const { formatReport } = await import(path.join(dist, "check/analyze.js"));
+  console.log(flag("json") ? JSON.stringify(report) : formatReport(report, meta.fps));
+  process.exit(report.issues.length ? 1 : 0);
+}
+
+if (cmd === "check") {
+  const t0 = Date.now();
+  const entry = path.resolve(file);
+  const paced = !!flag("paced");
+  const js = await bundle(
     `import { createElement, createRef } from "react";
+import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { Player } from "@remotion/player";
 import { collectDom, untrackedOver } from ${JSON.stringify(path.join(dist, "check/dom.js"))};
-import { analyze } from ${JSON.stringify(path.join(dist, "check/analyze.js"))};
 import E0 from ${JSON.stringify(entry)};
 // The entry is the config, or a function of --arg (one entry for several cuts).
 const E = typeof E0 === "function" ? E0(${JSON.stringify(flag("arg") ? JSON.parse(flag("arg")) : null)}) : E0;
@@ -166,45 +198,151 @@ const root = document.getElementById("root");
 root.style.width = E.width + "px"; root.style.height = E.height + "px";
 createRoot(root).render(createElement(Player, { ref, component: E.component, inputProps: E.props ?? {}, durationInFrames: E.durationInFrames, fps: E.fps, compositionWidth: E.width, compositionHeight: E.height, style: { width: E.width, height: E.height } }));
 const raf = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-window.__rompMeta = { fps: E.fps, durationInFrames: E.durationInFrames, width: E.width, height: E.height };
-window.__rompRun = async (from, to) => {
-  while (!ref.current) await raf();
-  await document.fonts.ready;
-  const frames = [];
-  const strict = ${strict} || !!E.strict;
-  const unseen = new Map();
-  for (let f = from; f <= to; f++) {
-    ref.current.seekTo(f); await raf(); frames.push({ f, row: collectDom(root) });
-    if (strict) for (const u of untrackedOver(root)) if (!unseen.has(u.what)) unseen.set(u.what, { ...u, f });
+// One macrotask: React's scheduler runs passive effects (and what they set) in the meantime.
+const tick = () => new Promise((r) => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); });
+const { component, props, ...opts } = E;
+window.__rompMeta = { fps: E.fps, durationInFrames: E.durationInFrames, width: E.width, height: E.height, opts: JSON.parse(JSON.stringify(opts)) };
+const ready = (async () => { while (!ref.current) await raf(); await document.fonts.ready; })();
+window.__rompRows = async (frames, o) => {
+  await ready;
+  const rows = [], unseen = [], seen = new Set();
+  for (const f of frames) {
+    if (o.trace) console.log("romp:frame " + f);
+    if (o.paced) { ref.current.seekTo(f); await raf(); }
+    else { flushSync(() => ref.current.seekTo(f)); await tick(); await tick(); }
+    rows.push({ f, row: collectDom(root) });
+    if (o.strict) for (const u of untrackedOver(root)) if (!seen.has(u.what + "|" + u.text)) { seen.add(u.what + "|" + u.text); unseen.push({ ...u, f }); }
   }
-  const { component, props, durationInFrames, ...opts } = E;
-  const report = analyze(frames, { ...opts, fps: E.fps, width: E.width, height: E.height, strict });
-  if (unseen.size) report.warnings = [...unseen.values()].map((u) => "untracked " + u.what + " (" + u.size + ") is drawn over the text " + u.text + " at frame " + u.f + ": romp can't see what's in it. Track its props (data-romp works on SVG children too)");
-  return report;
+  return { rows, unseen };
 };`,
     "check",
   );
   const pub = flag("public") ? path.resolve(flag("public")) : null;
   const server = await serve(js, pub);
-  const browser = await chromium.launch();
-  const meta0 = { width: 1080, height: 1920 };
-  const page = await browser.newPage({ viewport: meta0 });
-  page.on("pageerror", (e) => console.error("page error:", e.message));
-  await page.goto(`http://127.0.0.1:${server.address().port}/`);
-  await page.waitForFunction(() => window.__rompMeta);
-  const meta = await page.evaluate(() => window.__rompMeta);
-  await page.setViewportSize({ width: meta.width, height: meta.height });
-  const from = Math.round(+(flag("from", 0)) * meta.fps), to = Math.min(meta.durationInFrames - 1, Math.round(+(flag("to", meta.durationInFrames / meta.fps)) * meta.fps));
-  const report = await page.evaluate(([a, b]) => window.__rompRun(a, b), [from, to]);
+  const url = `http://127.0.0.1:${server.address().port}/`;
+  const browser = await launch();
+  const noMedia = !!flag("no-media");
+  /** A fresh page (its own context, so its own renderer process) with the composition loaded. */
+  async function open(log) {
+    const ctx = await browser.newContext({ viewport: { width: 1080, height: 1920 } });
+    const page = await ctx.newPage();
+    page.on("console", (m) => { log.push(`[${m.type()}] ${m.text()}`); if (log.length > 60) log.shift(); });
+    page.on("pageerror", (e) => { log.push(`[pageerror] ${e.message}`); if (log.length > 60) log.shift(); });
+    // Layout only: media never needs to play (a <Video> keeps its box without it).
+    if (noMedia) await page.route(/\.(mp4|webm|mov|m4v|mkv|mp3|m4a|aac|ogg|opus|wav)(\?|$)/i, (r) => r.fulfill({ status: 404, body: "" }));
+    await page.goto(url);
+    await page.waitForFunction(() => window.__rompMeta);
+    const meta = await page.evaluate(() => window.__rompMeta);
+    await page.setViewportSize({ width: meta.width, height: meta.height });
+    return { page, meta, ctx };
+  }
+  const first = await open([]);
+  const meta = first.meta;
+  const fps = meta.fps;
+  await first.ctx.close();
+
+  // ── Which frames: --scene, --from/--to, --every ─────────────────────────────
+  const opts = meta.opts ?? {};
+  const sections = opts.sections?.length
+    ? opts.sections
+    : [0, ...(opts.scenes ?? [])].map((t, i, a) => ({ name: String(i + 1), from: t, to: a[i + 1] ?? meta.durationInFrames / fps }));
+  if (flag("scenes")) {
+    for (const [i, s] of sections.entries()) console.log(`${String(i + 1).padStart(3)}  ${s.name.padEnd(24)} ${s.from.toFixed(2).padStart(8)}–${s.to.toFixed(2)} s  (${Math.round((s.to - s.from) * fps)} frames)`);
+    await browser.close();
+    server.close();
+    process.exit(0);
+  }
+  let fromS = +flag("from", 0), toS = +flag("to", meta.durationInFrames / fps);
+  const sceneArg = flag("scene");
+  if (typeof sceneArg === "string") {
+    const sc = sections.find((s) => s.name === sceneArg) ?? (/^\d+$/.test(sceneArg) ? sections[+sceneArg - 1] : null);
+    if (!sc) {
+      console.error(`romp check: no scene "${sceneArg}". Scenes: ${sections.map((s) => s.name).join(", ")} (or 1–${sections.length})`);
+      process.exit(2);
+    }
+    fromS = sc.from;
+    toS = sc.to - 1 / fps;
+  }
+  const from = Math.max(0, Math.round(fromS * fps)), to = Math.min(meta.durationInFrames - 1, Math.round(toS * fps));
+  const every = Math.max(1, Math.round(+flag("every", 1)) || 1);
+  const want = [];
+  for (let f = Math.ceil(from / every) * every; f <= to; f += every) want.push(f);
+
+  // ── Shard across pages ──────────────────────────────────────────────────────
+  const cores = os.cpus().length;
+  const jobsAsked = flag("jobs");
+  const jobs = Math.max(1, Math.min(typeof jobsAsked === "string" ? +jobsAsked : Math.max(1, Math.min(8, Math.floor(cores / 2))), Math.ceil(want.length / 150)));
+  const per = Math.ceil(want.length / jobs);
+  const CHUNK = 150;
+  async function shard(list) {
+    const log = [];
+    let { page, ctx } = await open(log);
+    const rows = [], unseen = [];
+    for (let k = 0; k < list.length; k += CHUNK) {
+      const part = list.slice(k, k + CHUNK);
+      try {
+        const r = await page.evaluate(([fs_, o]) => window.__rompRows(fs_, o), [part, { strict, paced }]);
+        rows.push(...r.rows);
+        unseen.push(...r.unseen);
+      } catch (e) {
+        // Find the frame: replay the chunk in a fresh page, logging each frame.
+        console.error(`romp check: the page failed between frames ${part[0]} and ${part[part.length - 1]}: ${String(e.message ?? e).split("\n")[0]}`);
+        console.error("page console (latest last):\n  " + (log.slice(-30).join("\n  ") || "(nothing)"));
+        await ctx.close().catch(() => {});
+        const tlog = [];
+        const again = await open(tlog);
+        let last = null;
+        again.page.on("console", (m) => { const x = /^romp:frame (\d+)$/.exec(m.text()); if (x) last = +x[1]; });
+        await again.page.evaluate(([fs_, o]) => window.__rompRows(fs_, o), [part, { strict, paced, trace: true }]).then(
+          () => console.error("romp check: the replay didn't fail (a memory build-up across frames?); try --jobs with more pages, or --from/--to"),
+          () => console.error(`romp check: the page died on frame ${last} (${(last / fps).toFixed(2)} s), the last frame it reached`),
+        );
+        await browser.close().catch(() => {});
+        server.close();
+        process.exit(2);
+      }
+    }
+    await ctx.close();
+    return { rows, unseen };
+  }
+  const parts = await Promise.all(Array.from({ length: jobs }, (_, j) => shard(want.slice(j * per, (j + 1) * per))));
   await browser.close();
   server.close();
+  // Merged in frame order, then checked as one film: rules over neighbouring frames see across shard edges.
+  const frames = parts.flatMap((p) => p.rows).sort((a, b) => a.f - b.f);
+  if (process.env.ROMP_DUMP_ROWS) fs.writeFileSync(process.env.ROMP_DUMP_ROWS, JSON.stringify(frames));
+  const unseenAll = new Map();
+  for (const u of parts.flatMap((p) => p.unseen).sort((a, b) => a.f - b.f)) if (!unseenAll.has(u.what + "|" + u.text)) unseenAll.set(u.what + "|" + u.text, u);
+  const { analyze, formatReport } = await import(path.join(dist, "check/analyze.js"));
+  const base = { ...opts, width: meta.width, height: meta.height, strict: strict || !!opts.strict };
+  if (flag("occupancy")) base.occupancy = typeof flag("occupancy") === "string" ? +flag("occupancy") : true;
+  // Sampled: frame k·N becomes frame k at fps/N, so every threshold in seconds still holds.
+  const report = every > 1
+    ? (() => {
+        const r = analyze(frames.map(({ f, row }) => ({ f: f / every, row })), { ...base, fps: fps / every, layoutOnly: true });
+        r.issues.forEach((i) => (i.frame *= every));
+        return r;
+      })()
+    : analyze(frames, { ...base, fps });
+  const untrackedErr = flag("untracked") === "error";
+  const notes = [...unseenAll.values()].map((u) =>
+    u.kind === "text"
+      ? `untracked ${u.what} (${u.size}) is drawn on ${u.text} at frame ${u.f}: romp can't check it. Track it (trackText), or mark it as part of what it sits on`
+      : `untracked ${u.what} (${u.size}) is drawn over ${u.text} at frame ${u.f}: romp can't see what's in it. Track its props (data-romp works on SVG children too)`,
+  );
+  if (untrackedErr) {
+    [...unseenAll.values()].forEach((u, i) => report.issues.push({ frame: u.f, name: u.text, kind: "untracked", detail: notes[i] }));
+    report.issues.sort((a, b) => a.frame - b.frame);
+  } else if (notes.length) report.warnings = notes;
+  const secs = (Date.now() - t0) / 1000;
   const audio = await audioCheck();
   if (flag("json")) console.log(JSON.stringify(audio ? { ...report, audio: { file: audio.file, dropouts: audio.dropouts } } : report));
   else {
-    const { formatReport } = await import(path.join(dist, "check/analyze.js"));
-    console.log(formatReport(report, meta.fps));
+    console.log(formatReport(report, fps));
+    if (every > 1) console.log(`(sampled every ${every} frames: layout rules only; pop, strobe, teleport, jump, spike, lost, unfinished, unread, empty and stale need every frame)`);
     if (audio) console.log(audio.text);
   }
+  console.error(`romp check: ${want.length} frames in ${secs.toFixed(1)} s on ${jobs} page${jobs > 1 ? "s" : ""}${paced ? " (paced)" : ""}`);
   process.exit(report.issues.length || audio?.dropouts.length ? 1 : 0);
 }
 

@@ -12,7 +12,9 @@
  *   overlap     two texts overlap for more than `overlapSeconds` (0.2 s), or a
  *               prop is drawn over a text (papers, a vehicle, confetti crossing a
  *               title) for more than `propOverlapSeconds` (two frames): a fast
- *               prop over words is exactly what reads as a glitch
+ *               prop over words is exactly what reads as a glitch. A text on a
+ *               `screen`'s content (either drawn over the other) for more than
+ *               `overlapSeconds`, unless the text has an `opaque` panel of its own
  *   unfinished  a text disappears, or its scene cuts, before every character is
  *               shown: a caption cut off mid-word
  *   unread      a text is whole for less than its reading time (`readingTime()`)
@@ -38,6 +40,8 @@ export interface Margins {
 }
 
 export interface TextOptions {
+  /** sampled frames: skip the rules that need every frame (unfinished, unread, empty, stale) */
+  layoutOnly?: boolean;
   /** scene starts (cuts), seconds: a text's time on screen ends at a cut */
   scenes?: number[];
   /** untagged objects count as props for the overlap rule, and the stale rule runs */
@@ -161,7 +165,7 @@ export function textIssues(frames: FrameRow[], names: string[], o: TextOptions &
   const headingRun = run(o.headingSeconds ?? 0.5);
   /** per text, per frame index: frames it has been whole and legible in this appearance */
   const wholeFor = new Map<string, number[]>();
-  for (const name of texts) {
+  for (const name of o.layoutOnly ? [] : texts) {
     const whole: number[] = new Array(frames.length).fill(0);
     wholeFor.set(name, whole);
     let open = false, full = 0, last: Sample | null = null, since = 0;
@@ -248,6 +252,19 @@ export function textIssues(frames: FrameRow[], names: string[], o: TextOptions &
           const share = shared / Math.max(1, areaOf(qb));
           if (share > coversFrac && !allowed("covers", ts[a]) && !allowed("covers", n))
             bump(`c|${ts[a]}|${n}`, "covers", ts[a], coversRun, () => `covers ${Math.round(share * 100)}% of the focus ${n}, the thing it's about`);
+        } else if (roles.get(n) === "background") {
+          continue;
+        } else if (roles.get(n) === "screen") {
+          // Words on a screen's content hide it, and the content fights the words:
+          // fine only on a solid panel of the text's own. A screen drawn over a text hides it.
+          const sb = q.clip ?? qb;
+          const share = boxOverlap(tb, sb) / Math.max(1, Math.min(areaOf(tb), areaOf(sb)));
+          if (share <= overlapFrac || allowed("overlap", ts[a]) || allowed("overlap", n)) continue;
+          const above = q.z == null || t.z == null || t.z > q.z;
+          if (above && t.opaque) continue;
+          bump(`s|${ts[a]}|${n}`, "overlap", ts[a], overlapRun, () =>
+            above ? `sits on the screen ${n}'s content with no panel of its own (${Math.round(share * 100)}% of the smaller): give it a solid background, or move it off` : `the screen ${n} is drawn over it (${Math.round(share * 100)}% of the smaller)`,
+          );
         } else {
           // A prop drawn under the text (a backdrop, the device it captions) is fine.
           if (q.z != null && t.z != null && q.z < t.z) continue;
@@ -260,7 +277,7 @@ export function textIssues(frames: FrameRow[], names: string[], o: TextOptions &
   }
 
   // ── stale ───────────────────────────────────────────────────────────────────
-  if (o.stale || (o.strict && o.stale !== false)) {
+  if (!o.layoutOnly && (o.stale || (o.strict && o.stale !== false))) {
     const limit = run(typeof o.stale === "number" ? o.stale : 3);
     const same = (a?: Sample, b?: Sample) => {
       if (!a || !b) return !a && !b;

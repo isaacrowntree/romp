@@ -42,7 +42,14 @@
  * Text rules (text.ts) run over samples that carry a `role`: words a viewer has
  * to read (`text`), the thing being talked about (`focus`) and everything else
  * that moves (`prop`): offsafe, covers, overlap, unfinished, unread, empty and
- * (opt-in) stale. Screens and anchors are in screen.ts.
+ * (opt-in) stale. Screens, text size and anchors are in screen.ts; blank,
+ * clipped and occupancy in layout.ts.
+ *
+ * `layoutOnly` (sampled frames, `romp check --every N`): only the rules that
+ * read one frame's layout run (cropped, offsafe, covers, overlap, legibility,
+ * anchor, clipped, blank, occupancy); the motion rules and the timing text rules
+ * (pop, strobe, teleport, jump, spike, lost, unfinished, unread, empty, stale)
+ * need every frame and are skipped.
  *
  * It only reads positions, so it works for anything you can seek: a realtime
  * page's seek(t), a frame renderer, three.js or the DOM (see collectDom and
@@ -50,8 +57,9 @@
  */
 import { type TextOptions } from "./text.js";
 import { type ScreenOptions } from "./screen.js";
+import { type LayoutOptions } from "./layout.js";
 /** What a tracked object is, for the text rules. */
-export type Role = "text" | "focus" | "prop" | "screen";
+export type Role = "text" | "focus" | "prop" | "screen" | "background";
 export interface Sample {
     /** on-screen centre, px */
     x: number;
@@ -109,10 +117,21 @@ export interface Sample {
     anchor?: string;
     /** text: a ground line, y in frame px; no part of it may show below */
     ground?: number;
+    /** text: its smallest text as rendered, px (font-size × on-screen scale) */
+    fontPx?: number;
+    /** what's left of its box after clipping ancestors (overflow: hidden), frame px; absent: not clipped */
+    clip?: {
+        x0: number;
+        y0: number;
+        x1: number;
+        y1: number;
+    };
+    /** text: it sits on a solid panel of its own (an opaque background) */
+    opaque?: boolean;
 }
 /** The text rules. */
-export type TextKind = "offsafe" | "covers" | "overlap" | "unfinished" | "unread" | "empty" | "stale" | "legibility" | "anchor";
-export type IssueKind = "pop" | "strobe" | "teleport" | "jump" | "spike" | "cropped" | "lost" | TextKind;
+export type TextKind = "offsafe" | "covers" | "overlap" | "unfinished" | "unread" | "empty" | "stale" | "legibility" | "anchor" | "clipped" | "blank" | "occupancy";
+export type IssueKind = "pop" | "strobe" | "teleport" | "jump" | "spike" | "cropped" | "lost" | "untracked" | TextKind;
 export interface FrameRow {
     f: number;
     row: Record<string, Sample>;
@@ -123,7 +142,9 @@ export interface Issue {
     kind: IssueKind;
     detail: string;
 }
-export interface AnalyzeOptions extends TextOptions, ScreenOptions {
+export interface AnalyzeOptions extends TextOptions, ScreenOptions, LayoutOptions {
+    /** sampled frames: run only the rules that read one frame's layout */
+    layoutOnly?: boolean;
     fps?: number;
     /** frame width in px: thresholds scale from 886 px unless given */
     width?: number;

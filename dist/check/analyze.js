@@ -42,7 +42,14 @@
  * Text rules (text.ts) run over samples that carry a `role`: words a viewer has
  * to read (`text`), the thing being talked about (`focus`) and everything else
  * that moves (`prop`): offsafe, covers, overlap, unfinished, unread, empty and
- * (opt-in) stale. Screens and anchors are in screen.ts.
+ * (opt-in) stale. Screens, text size and anchors are in screen.ts; blank,
+ * clipped and occupancy in layout.ts.
+ *
+ * `layoutOnly` (sampled frames, `romp check --every N`): only the rules that
+ * read one frame's layout run (cropped, offsafe, covers, overlap, legibility,
+ * anchor, clipped, blank, occupancy); the motion rules and the timing text rules
+ * (pop, strobe, teleport, jump, spike, lost, unfinished, unread, empty, stale)
+ * need every frame and are skipped.
  *
  * It only reads positions, so it works for anything you can seek: a realtime
  * page's seek(t), a frame renderer, three.js or the DOM (see collectDom and
@@ -50,6 +57,7 @@
  */
 import { textIssues } from "./text.js";
 import { screenIssues } from "./screen.js";
+import { layoutIssues } from "./layout.js";
 export function analyze(frames, o = {}) {
     const fps = o.fps ?? 30;
     const scale = (o.width ?? 886) / 886;
@@ -63,7 +71,7 @@ export function analyze(frames, o = {}) {
     const names = [...new Set(frames.flatMap((fr) => Object.keys(fr.row)))];
     const blank = { x: 0, y: 0, shown: false, onScreen: false, area: 0, opacity: 0 };
     const issues = [];
-    for (const name of names) {
+    for (const name of o.layoutOnly ? [] : names) {
         const s = frames.map(({ f, row }) => ({ f, ...(row[name] ?? blank) }));
         const maxArea = Math.max(...s.map((p) => p.area));
         const impacts = new Set((o.impacts?.[name] ?? []).map(Math.round));
@@ -107,7 +115,8 @@ export function analyze(frames, o = {}) {
             const fading = b.opacity < a.opacity - 0.01 || a.opacity < 0.99;
             const near = s.slice(Math.max(0, i - 2), i + 2).filter((p) => p.shown);
             const sizing = near.some((p, k) => k > 0 && Math.abs(p.area - near[k - 1].area) > 0.02 * Math.max(p.area, near[k - 1].area));
-            if (ai == null || ai < 6 * scale || fading || sizing || isImpact(i))
+            const nearCut = cutAt.has(b.f) || cutAt.has(b.f + 1) || cutAt.has(a.f);
+            if (ai == null || ai < 6 * scale || fading || sizing || nearCut || isImpact(i))
                 continue;
             const around = acc.slice(Math.max(0, i - 4), i - 1).concat(acc.slice(i + 2, i + 5)).filter((x) => x != null);
             const typical = around.length ? around.sort((x, y) => x - y)[Math.floor(around.length / 2)] : 0;
@@ -116,8 +125,8 @@ export function analyze(frames, o = {}) {
         }
     }
     if (o.width && o.height)
-        issues.push(...cropped(frames, names, o, fps, hidden), ...lost(frames, names, o, fps, hidden));
-    issues.push(...textIssues(frames, names, o, fps, hidden), ...screenIssues(frames, names, o, fps, hidden));
+        issues.push(...cropped(frames, names, o, fps, hidden), ...(o.layoutOnly ? [] : lost(frames, names, o, fps, hidden)));
+    issues.push(...textIssues(frames, names, o, fps, hidden), ...screenIssues(frames, names, o, fps, hidden), ...layoutIssues(frames, names, o, fps, hidden));
     issues.sort((a, b) => a.frame - b.frame);
     return { tracked: names, frames: frames.length, issues };
 }

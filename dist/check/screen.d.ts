@@ -9,7 +9,10 @@
  *               A phone mock a third of a portrait frame wide, a whole desktop
  *               page in a browser frame. Zooming in or out (its size only rises,
  *               or only falls) is fine; so is a screen zoomed or cropped to the
- *               part that matters
+ *               part that matters. A `text` with its rendered `fontPx` (the
+ *               DOM collector reads font-size × on-screen scale) under
+ *               `textPx` (the same 20 px at a 1080 short side) fails the same way:
+ *               a label or bubble set too small
  *   anchor      a text with an `anchor` (the tracked object it belongs to: a
  *               speech bubble's speaker) is more than `anchorPx` (10% of the
  *               short side) from that object's box for more than
@@ -24,6 +27,8 @@ export interface ScreenOptions {
     legiblePx?: number;
     /** legibility: a screen's body text in native px when the sample doesn't say (default 16) */
     minTextPx?: number;
+    /** legibility: the smallest rendered size for a `text` (default: `legiblePx`) */
+    textPx?: number;
     /** legibility: how long a screen may stay too small (default 0.5 s) */
     legibleSeconds?: number;
     /** anchor: how far a text may sit from its anchor's box, px (default 10% of the short side) */
