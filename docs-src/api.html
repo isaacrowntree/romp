@@ -59,11 +59,13 @@ talk(t, syllables): { open: 0..1, vowel, mouth: "closed"|"open"|"wide"|"round", 
 talkPose(frame, t, syllables, seed?): CharacterPose &amp; { speech }      speechLength(syllables): seconds</code></pre>
 <p>Words as timed syllables (English by vowel group, Chinese, Japanese and Korean by character), and the mouth for each moment. Pass the same list to <code>babble(t, dur, out, { syllables })</code> and the voice says what the mouth shows.</p>
 <h3 data-export="gaze" id="gaze">gaze</h3>
-<pre class="sig"><code>gaze(frame, { keys?: { at, x, y? }[], seed?, wander = 0.18, saccade = 3, follow = 0.3, delay = 2 }?): { x, y, head, blink }</code></pre>
+<pre class="sig"><code>gaze(frame, { keys?: { at, x, y? }[], seed?, wander = 0.18, saccade = 3, follow = 0.3, delay = 2 }?): { x, y, head, blink, dip }</code></pre>
 <p>Eyes that jump to a look in a few frames and hold it (with small drifts), blink on a big change, and a head that follows a couple of frames behind.</p>
 <h3 data-export="jump" id="jump">jump · react · alive · blinks · keepVolume</h3>
 <pre class="sig"><code>jump(frame, at, { height = 120, air = 16, crouch = 5, seed? }?): { y, pose, contact, phase }
-react(frame, at, "surprise" | "giggle" | "nod" | "shake", { seed?, strength? }?): { y (share of height), pose, mouth?, lookX?, done }
+react(frame, at, "surprise" | "doubleTake" | "realize" | "tremble" | "giggle" | "nod" | "shake", { seed?, strength? }?): { y (share of height), pose, mouth?, lookX?, contact, done }
+takeCurve(dt, { antic = 6, anticDepth = 0.35, accent = "hard", pop?, hold?, settle = 9, settleLevel = 0.5, keep = 8, release = 10 }?): { v, phase, pop }
+takeLength(options?): frames
 alive(frame, seed?): CharacterPose      blinks(frame, seed?): 0..1      keepVolume(squashY, k = 0.7): squashX
 REACTION_FRAMES: Record&lt;Reaction, number&gt;      hash01(a, b?): [0, 1)</code></pre>
 <p>A jump with its crouch, a speed-stretched parabola and a landing sized by the fall; reactions with their anticipations; idle that breathes unevenly and blinks irregularly; squash that keeps the body's volume.</p>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alive, blinks, gaze, hop, jump, keepVolume, react, REACTION_FRAMES, speechLength, syllables, talk, talkPose } from "../src/core/index.js";
+import { alive, blinks, gaze, hop, jump, keepVolume, react, REACTION_FRAMES, speechLength, syllables, takeCurve, takeLength, talk, talkPose } from "../src/core/index.js";
 
 describe("syllables", () => {
   it("counts English vowel groups, with a word-final silent e joining the one before", () => {
@@ -137,5 +137,70 @@ describe("life", () => {
   });
   it("hop squashes smoothly at contact (no one-frame switch)", () => {
     for (let f = 1; f < 32; f++) expect(Math.abs(hop(f, 16).pose.squashY - hop(f - 1, 16).pose.squashY)).toBeLessThan(0.13);
+  });
+});
+
+describe("takes", () => {
+  it("goes the other way first, then pops to the accent on the very next frame (hard)", () => {
+    expect(takeCurve(5).v).toBeLessThan(-0.3);
+    expect(takeCurve(5).phase).toBe("antic");
+    const { pop } = takeCurve(0);
+    expect(pop).toBe(7);
+    expect(takeCurve(pop - 1).v).toBe(1); // the anticipation's end is the accent's first frame
+    expect(takeCurve(pop).v).toBe(1);
+    expect(takeCurve(pop + 1).v).toBe(1); // held a couple of frames
+  });
+  it("a hard accent bounces back past its settle; a soft one never overshoots", () => {
+    const hard = Array.from({ length: 40 }, (_, f) => takeCurve(f).v);
+    expect(Math.min(...hard.slice(10, 20))).toBeLessThan(0.5);
+    const soft = Array.from({ length: 40 }, (_, f) => takeCurve(f, { accent: "soft" }).v);
+    expect(Math.max(...soft)).toBeLessThanOrEqual(1);
+    const settled = soft.slice(20, 24);
+    for (const v of settled) expect(v).toBeGreaterThanOrEqual(0.5 - 1e-9);
+  });
+  it("holds the settle, releases to rest, and its length adds up", () => {
+    const n = takeLength();
+    expect(takeCurve(n - 1).v).toBeGreaterThan(0);
+    expect(takeCurve(n)).toMatchObject({ v: 0, phase: "done" });
+    expect(takeCurve(500, { release: Infinity }).v).toBe(0.5);
+  });
+});
+
+describe("reactions as takes", () => {
+  it("surprise marks its accent as a contact, and squints in the anticipation", () => {
+    expect(react(4, 0, "surprise").pose.blink).toBeGreaterThan(0.5);
+    expect(react(7, 0, "surprise").contact).toBe(true);
+    expect(react(20, 0, "surprise").contact).toBe(false);
+  });
+  it("a double take glances away and back before the take", () => {
+    expect(react(1, 0, "doubleTake").lookX).toBeLessThan(0);
+    expect(react(4, 0, "doubleTake").lookX).toBeGreaterThan(0);
+    expect(react(6 + 7, 0, "doubleTake").y).toBeLessThan(0);
+  });
+  it("realize shuts the eyes in the dip, then opens them", () => {
+    expect(react(4, 0, "realize").pose.blink).toBe(1);
+    expect(react(12, 0, "realize").pose.blink).toBe(0);
+  });
+  it("tremble alternates two poses every 2 frames while it holds", () => {
+    const a = react(8, 0, "tremble").pose.squashY, b = react(10, 0, "tremble").pose.squashY, c = react(12, 0, "tremble").pose.squashY;
+    expect(a).not.toBeCloseTo(b, 3);
+    expect(a).toBeCloseTo(c, 3);
+  });
+  it("every reaction is done after its REACTION_FRAMES", () => {
+    for (const k of Object.keys(REACTION_FRAMES) as (keyof typeof REACTION_FRAMES)[]) expect(react(REACTION_FRAMES[k], 0, k).done).toBe(true);
+  });
+});
+
+describe("gaze anticipation", () => {
+  it("dips just before a big look, not for a small one", () => {
+    expect(gaze(8, { keys: [{ at: 10, x: 1 }], wander: 0 }).dip).toBeGreaterThan(0.3);
+    expect(gaze(20, { keys: [{ at: 10, x: 1 }], wander: 0 }).dip).toBe(0);
+    expect(gaze(8, { keys: [{ at: 10, x: 0.3 }], wander: 0 }).dip).toBe(0);
+  });
+  it("the head overshoots a little and settles", () => {
+    const h = Array.from({ length: 60 }, (_, f) => gaze(f + 10, { keys: [{ at: 10, x: 1 }], wander: 0 }).head);
+    expect(Math.max(...h)).toBeGreaterThan(1);
+    expect(Math.max(...h)).toBeLessThan(1.1);
+    expect(h[59]).toBeCloseTo(1, 2);
   });
 });

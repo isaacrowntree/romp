@@ -106,6 +106,8 @@ export interface Gaze {
     head: number;
     /** a blink that comes with a big look (0…1) */
     blink: number;
+    /** 0…1: the small dip a body makes just before a big look (its anticipation): squash by it */
+    dip: number;
 }
 /**
  * Eyes that jump and hold, the way eyes do: each look is a saccade of a few
@@ -137,7 +139,41 @@ export interface Jumping {
  * how hard it came down. Volume kept throughout.
  */
 export declare function jump(frame: number, at: number, o?: JumpOptions): Jumping;
-export type Reaction = "surprise" | "giggle" | "nod" | "shake";
+export interface TakeOptions {
+    /** frames easing into the anticipation (default 6) */
+    antic?: number;
+    /** how far the anticipation goes the other way, as a share of the accent (default 0.35) */
+    anticDepth?: number;
+    /** "hard" pops to the accent, holds, and bounces back; "soft" eases in (default "hard") */
+    accent?: "hard" | "soft";
+    /** frames to reach the accent (default 1 hard, 9 soft) */
+    pop?: number;
+    /** frames the extreme is held (default 2 hard, 0 soft) */
+    hold?: number;
+    /** frames into the settle (default 9) */
+    settle?: number;
+    /** the settle, as a share of the accent (default 0.5) */
+    settleLevel?: number;
+    /** frames the settle is held (default 8) */
+    keep?: number;
+    /** frames back to rest (default 10; Infinity keeps the settle) */
+    release?: number;
+}
+export type TakePhase = "rest" | "antic" | "accent" | "settle" | "release" | "done";
+/** Frames a take lasts with these options (Infinity if it keeps its settle). */
+export declare function takeLength(o?: TakeOptions): number;
+/**
+ * A take's curve at `dt` frames from its start: 0 at rest, −anticDepth at the
+ * end of the anticipation, 1 at the accent, settleLevel once settled, then back
+ * to 0. Map it onto any pose (a squash, a lean, a head turn). `pop` is the
+ * frame the accent lands on (mark it as a contact for the motion check).
+ */
+export declare function takeCurve(dt: number, o?: TakeOptions): {
+    v: number;
+    phase: TakePhase;
+    pop: number;
+};
+export type Reaction = "surprise" | "doubleTake" | "realize" | "tremble" | "giggle" | "nod" | "shake";
 export interface Reacting {
     /** offset up, as a share of the character's height (multiply by its size) */
     y: number;
@@ -146,17 +182,25 @@ export interface Reacting {
     mouth?: "round" | "open" | "closed";
     /** eyes left/right, when it moves them */
     lookX?: number;
+    /** the accent's pop and hold (a deliberate change of speed): mark it as a contact for the motion check */
+    contact: boolean;
     /** finished (back to idle) */
     done: boolean;
 }
 /** How long each reaction takes (frames at 30 fps). */
 export declare const REACTION_FRAMES: Record<Reaction, number>;
 /**
- * A quick reaction from `at`, each with its anticipation:
- * - surprise (a "take"): a 3-frame flinch down, a pop up with eyes wide and a
- *   round mouth, the hat flying up, a squashy landing;
- * - giggle: fast small bounces, eyes squeezed, mouth open, fading out;
- * - nod: two dips forward;
+ * A reaction from `at`, built as a take:
+ * - surprise: squash and squint (anticipation), pop tall with eyes wide, a round
+ *   mouth and the hat up (a hard accent held 2 frames), bounce back into a
+ *   softer held surprise, then relax;
+ * - doubleTake: a glance away and back, 3 frames apart, then the surprise;
+ * - realize: the acting blink: a dip with the eyes shut, then eyes open and
+ *   the head up (a soft accent), settling;
+ * - tremble: a moving hold for fear: the accent alternating with a slightly
+ *   weaker pose every 2 frames, then settling;
+ * - giggle: fast small bounces, eyes squeezed, mouth open, fading;
+ * - nod: a small lift first, then two dips forward;
  * - shake: the head and eyes swinging side to side, settling.
  */
 export declare function react(frame: number, at: number, kind: Reaction, o?: {

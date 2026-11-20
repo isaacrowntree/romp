@@ -206,6 +206,8 @@ export interface Gaze {
   head: number;
   /** a blink that comes with a big look (0…1) */
   blink: number;
+  /** 0…1: the small dip a body makes just before a big look (its anticipation): squash by it */
+  dip: number;
 }
 
 /**
@@ -237,6 +239,16 @@ export function gaze(frame: number, o: GazeOptions = {}): Gaze {
     }
   }
   steps.sort((a, b) => a.at - b.at);
+  // The dip: keys are known ahead, so a big look can be anticipated (a dip that
+  // starts 4 frames before the eyes move and is gone 6 after).
+  let dip = 0, prev = 0;
+  for (const k of keys) {
+    const d = Math.abs(k.x - prev);
+    prev = k.x;
+    if (d < 0.5) continue;
+    const u = (frame - (k.at - 4)) / 10;
+    if (u > 0 && u < 1) dip = Math.max(dip, Math.sin(Math.PI * u) * Math.min(1, d));
+  }
   let x = 0, y = 0, head = 0, blink = 0, px = 0, py = 0;
   for (const s of steps) {
     if (s.at > frame) break;
@@ -245,12 +257,16 @@ export function gaze(frame: number, o: GazeOptions = {}): Gaze {
     x += dx * u;
     y += dy * u;
     const th = frame - s.at - delay;
-    if (th > 0) head += dx * (1 - (1 + w * th) * Math.exp(-w * th));
+    // The head: a slightly underdamped spring (overshoots ~5% and settles), like a turn's accent.
+    if (th > 0) {
+      const z = 0.75, wd = w * Math.sqrt(1 - z * z);
+      head += dx * (1 - Math.exp(-z * w * th) * (Math.cos(wd * th) + (z / Math.sqrt(1 - z * z)) * Math.sin(wd * th)));
+    }
     if (Math.abs(dx) > 0.7 && frame - s.at < 3) blink = Math.max(blink, frame - s.at < 2 ? 1 : 0.5);
     px = s.x;
     py = s.y;
   }
-  return { x, y, head, blink };
+  return { x, y, head, blink, dip };
 }
 
 // ── Jumps ─────────────────────────────────────────────────────────────────
@@ -305,9 +321,78 @@ export function jump(frame: number, at: number, o: JumpOptions = {}): Jumping {
   return { y: 0, pose: { ...p, squashX: keepVolume(p.squashY / i.squashY) * i.squashX }, contact: frame - land <= 2, phase: "landed" };
 }
 
-// ── Reactions ─────────────────────────────────────────────────────────────
+// ── Takes and reactions ───────────────────────────────────────────────────
+//
+// A reaction is a "take" (School of Motion; The Animator's Survival Kit):
+// Start → Anticipation (a smaller move the opposite way) → Accent (the main
+// pose) → Settle (a softer version of the accent, held, so the new attitude
+// reads). A HARD accent pops to the extreme in a frame, holds it a couple of
+// frames and bounces back into the settle; a SOFT accent eases in with no
+// bounce. Timings are the sources' 24 fps counts scaled to 30 fps: anticipation
+// 6 (5), accent hold 2, settle 9 (7). Illumination's rule for the Minions holds
+// for any face without eyebrows: emotion is carried by clear poses and
+// attitude, as in a silent film, so each reaction is a distinct silhouette.
 
-export type Reaction = "surprise" | "giggle" | "nod" | "shake";
+export interface TakeOptions {
+  /** frames easing into the anticipation (default 6) */
+  antic?: number;
+  /** how far the anticipation goes the other way, as a share of the accent (default 0.35) */
+  anticDepth?: number;
+  /** "hard" pops to the accent, holds, and bounces back; "soft" eases in (default "hard") */
+  accent?: "hard" | "soft";
+  /** frames to reach the accent (default 1 hard, 9 soft) */
+  pop?: number;
+  /** frames the extreme is held (default 2 hard, 0 soft) */
+  hold?: number;
+  /** frames into the settle (default 9) */
+  settle?: number;
+  /** the settle, as a share of the accent (default 0.5) */
+  settleLevel?: number;
+  /** frames the settle is held (default 8) */
+  keep?: number;
+  /** frames back to rest (default 10; Infinity keeps the settle) */
+  release?: number;
+}
+
+export type TakePhase = "rest" | "antic" | "accent" | "settle" | "release" | "done";
+
+/** Frames a take lasts with these options (Infinity if it keeps its settle). */
+export function takeLength(o: TakeOptions = {}): number {
+  const hard = (o.accent ?? "hard") === "hard";
+  return (o.antic ?? 6) + (o.pop ?? (hard ? 1 : 9)) + (o.hold ?? (hard ? 2 : 0)) + (o.settle ?? 9) + (o.keep ?? 8) + (o.release ?? 10);
+}
+
+/**
+ * A take's curve at `dt` frames from its start: 0 at rest, −anticDepth at the
+ * end of the anticipation, 1 at the accent, settleLevel once settled, then back
+ * to 0. Map it onto any pose (a squash, a lean, a head turn). `pop` is the
+ * frame the accent lands on (mark it as a contact for the motion check).
+ */
+export function takeCurve(dt: number, o: TakeOptions = {}): { v: number; phase: TakePhase; pop: number } {
+  const hard = (o.accent ?? "hard") === "hard";
+  const antic = o.antic ?? 6, depth = o.anticDepth ?? 0.35, pop = o.pop ?? (hard ? 1 : 9), hold = o.hold ?? (hard ? 2 : 0);
+  const settle = o.settle ?? 9, level = o.settleLevel ?? 0.5, keep = o.keep ?? 8, release = o.release ?? 10;
+  const t1 = antic, t2 = t1 + pop, t3 = t2 + hold, t4 = t3 + settle, t5 = t4 + keep, t6 = t5 + release;
+  if (dt < 0) return { v: 0, phase: "rest", pop: t2 };
+  // Out of the start gently, into the anticipation pose slowly (ease-in-out, weighted to the end).
+  if (dt < t1) return { v: -depth * (1 - Math.pow(1 - smooth(dt / t1), 1.6)), phase: "antic", pop: t2 };
+  if (dt < t2) {
+    const u = (dt - t1 + 1) / pop; // hard: the very next frame is the accent
+    return { v: -depth + (1 + depth) * (hard ? Math.min(1, u) : 1 - Math.pow(1 - Math.min(1, u), 3)), phase: "accent", pop: t2 };
+  }
+  if (dt < t3) return { v: 1, phase: "accent", pop: t2 };
+  if (dt < t4) {
+    const u = (dt - t3) / settle;
+    // Hard: bounce back past the settle and in (a damped spring); soft: ease in (no bounce).
+    const k = hard ? Math.exp(-4.2 * u) * Math.cos(Math.PI * 1.6 * u) : Math.pow(1 - u, 3);
+    return { v: level + (1 - level) * k, phase: "settle", pop: t2 };
+  }
+  if (dt < t5 || !Number.isFinite(release)) return { v: level, phase: "settle", pop: t2 };
+  if (dt < t6) return { v: level * (1 - smooth((dt - t5) / release)), phase: "release", pop: t2 };
+  return { v: 0, phase: "done", pop: t2 };
+}
+
+export type Reaction = "surprise" | "doubleTake" | "realize" | "tremble" | "giggle" | "nod" | "shake";
 
 export interface Reacting {
   /** offset up, as a share of the character's height (multiply by its size) */
@@ -317,19 +402,56 @@ export interface Reacting {
   mouth?: "round" | "open" | "closed";
   /** eyes left/right, when it moves them */
   lookX?: number;
+  /** the accent's pop and hold (a deliberate change of speed): mark it as a contact for the motion check */
+  contact: boolean;
   /** finished (back to idle) */
   done: boolean;
 }
 
+const SURPRISE: TakeOptions = { antic: 6, anticDepth: 0.4, accent: "hard", settleLevel: 0.45 };
+const REALIZE: TakeOptions = { antic: 5, anticDepth: 0.5, accent: "soft", pop: 4, settle: 8, settleLevel: 0.35, keep: 6, release: 8 };
+const TREMBLE: TakeOptions = { antic: 5, anticDepth: 0.4, accent: "hard", hold: 10, settleLevel: 0.4 };
+/** A double take: a glance away and back (turns 3 frames apart), then the take. */
+const DOUBLE_LEAD = 6;
+
 /** How long each reaction takes (frames at 30 fps). */
-export const REACTION_FRAMES: Record<Reaction, number> = { surprise: 34, giggle: 26, nod: 18, shake: 22 };
+export const REACTION_FRAMES: Record<Reaction, number> = {
+  surprise: takeLength(SURPRISE),
+  doubleTake: DOUBLE_LEAD + takeLength(SURPRISE),
+  realize: takeLength(REALIZE),
+  tremble: takeLength(TREMBLE),
+  giggle: 26,
+  nod: 21,
+  shake: 22,
+};
+
+/** A surprise pose from a take's value: squashed and squinting in the anticipation; tall, wide-eyed, hat up at the accent. */
+function surprisePose(frame: number, dt: number, v: number, pop: number, k: number, seed: number): Reacting {
+  const i = idle(frame, seed);
+  const sy = 1 + 0.2 * k * v;
+  const up = Math.max(0, v);
+  return {
+    y: -0.12 * k * up,
+    pose: { squashY: sy, squashX: keepVolume(sy), tilt: i.tilt - 9 * k * v, lift: 7 * k * up, blink: v < 0 ? Math.min(1, 1.5 * -v) : 0, jiggle: dt >= pop ? jiggle(dt - pop, k) : 0 },
+    mouth: v > 0.3 ? "round" : undefined,
+    // The pop and the held extreme, through the bounce-back's start: deliberate changes of speed.
+    contact: dt >= pop - 1 && dt <= pop + 3,
+    done: false,
+  };
+}
 
 /**
- * A quick reaction from `at`, each with its anticipation:
- * - surprise (a "take"): a 3-frame flinch down, a pop up with eyes wide and a
- *   round mouth, the hat flying up, a squashy landing;
- * - giggle: fast small bounces, eyes squeezed, mouth open, fading out;
- * - nod: two dips forward;
+ * A reaction from `at`, built as a take:
+ * - surprise: squash and squint (anticipation), pop tall with eyes wide, a round
+ *   mouth and the hat up (a hard accent held 2 frames), bounce back into a
+ *   softer held surprise, then relax;
+ * - doubleTake: a glance away and back, 3 frames apart, then the surprise;
+ * - realize: the acting blink: a dip with the eyes shut, then eyes open and
+ *   the head up (a soft accent), settling;
+ * - tremble: a moving hold for fear: the accent alternating with a slightly
+ *   weaker pose every 2 frames, then settling;
+ * - giggle: fast small bounces, eyes squeezed, mouth open, fading;
+ * - nod: a small lift first, then two dips forward;
  * - shake: the head and eyes swinging side to side, settling.
  */
 export function react(frame: number, at: number, kind: Reaction, o: { seed?: number; strength?: number } = {}): Reacting {
@@ -337,37 +459,53 @@ export function react(frame: number, at: number, kind: Reaction, o: { seed?: num
   const dt = frame - at;
   const i = idle(frame, seed);
   const done = dt >= REACTION_FRAMES[kind];
-  if (dt < 0 || done) return { y: 0, pose: i, done };
+  if (dt < 0 || done) return { y: 0, pose: i, contact: false, done };
   if (kind === "surprise") {
-    if (dt < 3) {
-      const sy = 1 - 0.1 * k * (dt / 3);
-      return { y: 0, pose: { ...i, squashY: sy, squashX: keepVolume(sy), blink: 0.5 }, done };
-    }
-    const AIR = 9;
-    if (dt < 3 + AIR) {
-      const u = (dt - 3) / AIR, v = 1 - 2 * u;
-      const sy = 1 + 0.18 * k * Math.max(0, v);
-      return { y: -0.13 * k * 4 * u * (1 - u), pose: { squashY: sy, squashX: keepVolume(sy), tilt: -10 * k * v, lift: 7 * k * Math.max(0, v), blink: 0, jiggle: jiggle(dt - 3, k) }, mouth: "round", done };
-    }
-    const p = landing(frame, at + 3 + AIR, seed, 0.7 * k);
-    return { y: 0, pose: { ...p, blink: dt < 3 + AIR + 14 ? 0 : p.blink }, mouth: dt < 3 + AIR + 14 ? "round" : undefined, done };
+    const c = takeCurve(dt, SURPRISE);
+    return surprisePose(frame, dt, c.v, c.pop, k, seed);
+  }
+  if (kind === "doubleTake") {
+    if (dt < DOUBLE_LEAD) return { y: 0, pose: i, lookX: dt < 3 ? -0.5 : 0.6, contact: false, done };
+    const c = takeCurve(dt - DOUBLE_LEAD, SURPRISE);
+    return { ...surprisePose(frame, dt - DOUBLE_LEAD, c.v, c.pop, k, seed), lookX: 0.6 };
+  }
+  if (kind === "realize") {
+    const c = takeCurve(dt, REALIZE);
+    const sy = 1 + 0.08 * k * c.v;
+    return {
+      y: -0.03 * k * Math.max(0, c.v),
+      pose: { ...i, squashY: sy, squashX: keepVolume(sy), tilt: i.tilt + 5 * k * Math.max(0, -c.v) - 3 * k * Math.max(0, c.v), lift: 3 * k * Math.max(0, c.v), blink: c.v < -0.1 ? 1 : 0 },
+      contact: false,
+      done,
+    };
+  }
+  if (kind === "tremble") {
+    const c = takeCurve(dt, TREMBLE);
+    // The moving hold: alternate the accent with a weaker pose every 2 frames while it's held.
+    const holding = c.phase === "accent" && dt >= c.pop;
+    const v = holding && Math.floor((dt - c.pop) / 2) % 2 === 1 ? 0.82 : c.v;
+    const r = surprisePose(frame, dt, v, c.pop, 0.8 * k, seed);
+    const side = holding ? (Math.floor((dt - c.pop) / 2) % 2 ? 1 : -1) : 0;
+    return { ...r, pose: { ...r.pose, tilt: r.pose.tilt + 3 * side, jiggle: 2 * side }, mouth: c.v > 0.3 ? "open" : undefined, lookX: 0.2 * side };
   }
   if (kind === "giggle") {
     const fade = Math.exp(-dt / 12);
     const b = Math.sin(dt * 1.6) * fade;
     const sy = 1 + 0.05 * k * b;
-    return { y: -0.015 * k * Math.abs(b), pose: { ...i, squashY: sy, squashX: keepVolume(sy), tilt: 4 * k * Math.sin(dt * 0.8) * fade, blink: 0.65 }, mouth: "open", done };
+    return { y: -0.015 * k * Math.abs(b), pose: { ...i, squashY: sy, squashX: keepVolume(sy), tilt: 4 * k * Math.sin(dt * 0.8) * fade, blink: 0.65 }, mouth: "open", contact: false, done };
   }
   if (kind === "nod") {
-    const u = dt / REACTION_FRAMES.nod;
+    // A small lift (the anticipation), then two dips forward.
+    if (dt < 3) return { y: -0.005 * k, pose: { ...i, tilt: i.tilt - 3 * k * smooth(dt / 3) }, contact: false, done };
+    const u = (dt - 3) / (REACTION_FRAMES.nod - 3);
     const dip = Math.sin(Math.PI * 2 * u) ** 2 * (1 - 0.4 * u);
     const sy = i.squashY - 0.06 * k * dip;
-    return { y: 0.01 * k * dip, pose: { ...i, squashY: sy, squashX: keepVolume(sy), tilt: i.tilt + 7 * k * dip, blink: dip > 0.6 ? 0.4 : i.blink }, done };
+    return { y: 0.01 * k * dip, pose: { ...i, squashY: sy, squashX: keepVolume(sy), tilt: i.tilt + 7 * k * dip, blink: dip > 0.6 ? 0.4 : i.blink }, contact: false, done };
   }
   // shake
   const fade = 1 - dt / REACTION_FRAMES.shake;
   const s = Math.sin(dt * 0.95) * fade;
-  return { y: 0, pose: { ...i, tilt: i.tilt + 9 * k * s, jiggle: 3 * s }, lookX: -0.7 * s, mouth: "closed", done };
+  return { y: 0, pose: { ...i, tilt: i.tilt + 9 * k * s, jiggle: 3 * s }, lookX: -0.7 * s, mouth: "closed", contact: false, done };
 }
 
 // ── Life ──────────────────────────────────────────────────────────────────

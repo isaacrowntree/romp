@@ -3,6 +3,35 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.10.0] — 2026-11-20
+
+Reactions built the way character animators build them. Reading how a take is
+timed (School of Motion's take breakdown, The Animator's Survival Kit on hard
+and soft accents) and how Illumination's animators describe the Minions
+(emotion from clear poses and attitude, like a silent film, with some
+stiffness kept) showed what 0.9's reactions lacked: no accent held on its
+extreme, no bounce back into a held settle, and no double takes, acting blinks
+or moving holds.
+
+### Added
+- **`takeCurve(dt, options)`**: Start → Anticipation → Accent → Settle as one
+  value (−anticipation … 1 … settle … 0) to map onto any pose. Hard accents pop
+  in a frame, hold 2 and bounce back; soft accents ease in. Defaults are the
+  classic 24 fps counts scaled to 30 (anticipation 6, hold 2, settle 9).
+  `takeLength()`.
+- `react()`: **`doubleTake`** (a glance away and back, 3 frames apart, then the
+  take), **`realize`** (the acting blink: a dip with the eyes shut, then eyes
+  open and the head up) and **`tremble`** (a moving hold: two poses alternating
+  every 2 frames). Every reaction returns `contact` on its accent frame.
+- `gaze()` returns `dip`: a body's small dip just before a big look.
+
+### Changed
+- `react("surprise")` is now a hard take: squash and squint, pop tall with eyes
+  wide and the hat up, held 2 frames, bounced back into a softer held
+  surprise, then relaxed (36 frames, was 34). `nod` lifts a little first.
+- `gaze()`'s head overshoots its turn slightly (about 5%) and settles, instead of
+  creeping in.
+
 ## [0.9.0] — 2026-11-20
 
 Characters that act. A review of a film's cast found them moving like

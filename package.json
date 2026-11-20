@@ -1,6 +1,6 @@
 {
   "name": "romp",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.",
   "type": "module",
   "main": "./dist/index.js",

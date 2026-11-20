@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.9.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.10.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -44,6 +44,19 @@
     <main id="main"><div class="shell">
 <section class="hero"><h1>Changelog</h1><p class="hero__lede">Every release, newest first. Versions follow SemVer.</p></section>
 <div class="prose changelog"><p>All notable changes to this project are documented here. Format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>; versions follow <a href="https://semver.org/">SemVer</a>.</p>
+<h2 id="0-10-0-2026-11-20">[0.10.0] — 2026-11-20</h2>
+<p>Reactions built the way character animators build them. Reading how a take is timed (School of Motion's take breakdown, The Animator's Survival Kit on hard and soft accents) and how Illumination's animators describe the Minions (emotion from clear poses and attitude, like a silent film, with some stiffness kept) showed what 0.9's reactions lacked: no accent held on its extreme, no bounce back into a held settle, and no double takes, acting blinks or moving holds.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong><code>takeCurve(dt, options)</code></strong>: Start → Anticipation → Accent → Settle as one value (−anticipation … 1 … settle … 0) to map onto any pose. Hard accents pop in a frame, hold 2 and bounce back; soft accents ease in. Defaults are the classic 24 fps counts scaled to 30 (anticipation 6, hold 2, settle 9). <code>takeLength()</code>.</li>
+<li><code>react()</code>: <strong><code>doubleTake</code></strong> (a glance away and back, 3 frames apart, then the take), <strong><code>realize</code></strong> (the acting blink: a dip with the eyes shut, then eyes open and the head up) and <strong><code>tremble</code></strong> (a moving hold: two poses alternating every 2 frames). Every reaction returns <code>contact</code> on its accent frame.</li>
+<li><code>gaze()</code> returns <code>dip</code>: a body's small dip just before a big look.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><code>react("surprise")</code> is now a hard take: squash and squint, pop tall with eyes wide and the hat up, held 2 frames, bounced back into a softer held surprise, then relaxed (36 frames, was 34). <code>nod</code> lifts a little first.</li>
+<li><code>gaze()</code>'s head overshoots its turn slightly (about 5%) and settles, instead of creeping in.</li>
+</ul>
 <h2 id="0-9-0-2026-11-20">[0.9.0] — 2026-11-20</h2>
 <p>Characters that act. A review of a film's cast found them moving like animations, not characters: mouths flapping on a fixed beat whatever the words, eyes that slid or never moved, jumps with no crouch, every blink on the same metronome, and squash that changed the body's size. The rules animators use for each are now pure functions of the frame in romp/core.</p>
 <h3 id="added">Added</h3>
@@ -214,6 +227,6 @@
 <li>Live demo page in <code>docs/</code> and a generated hero GIF.</li>
 </ul></div>
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.9.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.10.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>
