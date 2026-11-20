@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.10.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.11.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -123,7 +123,16 @@ s.babble(t0, 2.4, voiceBus, { voice: "sunny", syllables: line });</code></pre>
 const lean = 12 * t.v;                      // lean back first, then forward hard, then hold a little forward
 const wow = react(frame, 40, "doubleTake"); // { y, pose, mouth, lookX, contact, done }</code></pre>
 <p>Timings default to the classic counts at 24 fps scaled to 30: anticipation 6 frames, accent held 2, settle 9. For characters without eyebrows (pills, blobs, desserts), the rule Illumination's animators give for the Minions applies: emotion comes from clear poses and attitude, like a silent film, so make each reaction a different silhouette, and keep the body a little stiff rather than rubbery. <code>gaze()</code> follows the same idea: a body dips just before a big look (its anticipation, <code>dip</code>), and the head overshoots its turn slightly and settles.</p>
-<p>Sources: School of Motion, "How to Animate Character Takes"; Richard Williams, <em>The Animator's Survival Kit</em> (hard and soft accents); fxguide, "How to make a Minion" (Pierre Leduc on body language and clarity).</p>
+<h3 id="feel">Feel: what reference footage and the classic texts agree on</h3>
+<ul>
+<li><strong>Hold, then snap.</strong> Poses hold 12–20 frames; the moves between them take 2–4, a hard one leaving a single stretched <em>smear</em> frame (<code>takeCurve</code> draws one by default). A pose needs about 8 frames at 30 fps to read, so idle (<code>alive</code>) is mostly breath, not sway.</li>
+<li><strong>One actor at a time.</strong> While one character reacts, the others hold still: the contrast is the joke, and the eye goes to the one that moves.</li>
+<li><strong>The mouth leads the sound</strong> by 2 frames (the eye reads a shape before the ear hears it), vowels pop open with no in-between, and m, b and p shut the lips first (<code>talk</code>). Talking is in the mouth; the body barely moves.</li>
+<li><strong>Eyes:</strong> a jump to a new look (a saccade), or a glide after something moving (pursuit: <code>{ pursue: true }</code> on a key). Blinks close fast and open slowly; a big look brings a long blink with it; about 14 a minute, fewer when calm.</li>
+<li><strong>Hit the contact, cushion after.</strong> A hop falls fastest at the ground and squashes on that frame (<code>hop</code>); heavier characters squash and stretch less and crouch longer (<code>jump({ weight })</code>).</li>
+<li><strong>A limbless walk is a waddle:</strong> rock about the feet, linger at each side, pass upright quickly with a small bob (<code>waddle</code>).</li>
+</ul>
+<p>Sources: School of Motion, "How to Animate Character Takes"; Richard Williams, <em>The Animator's Survival Kit</em> (hard and soft accents, holds, lip-sync lead, blinks); John Lasseter, "Principles of Traditional Animation Applied to 3D Computer Animation" (SIGGRAPH 1987); Disney Research, "Modeling and Animating Eye Blinks"; fxguide, "How to make a Minion" (Pierre Leduc on body language and clarity).</p>
 
 <h2 id="play">Two ways to play: live or frame by frame</h2>
 <p>Write one <code>seek(t)</code> that draws film time <code>t</code>. Both modes call it.</p>
@@ -428,6 +437,6 @@ const report = await motionCanvasReport({ seek: (f) =&gt; player.playback.seek(f
 </div>
 
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.10.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.11.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>

@@ -34,6 +34,8 @@ export interface Syllable {
     stress: boolean;
     /** the letters (or character) it came from */
     text: string;
+    /** the consonants before its vowel ("str" in "string"; "" for CJK): m, b and p close the lips first */
+    onset?: string;
 }
 export interface SyllableOptions {
     /** syllables a second (default 8: brisk cartoon speech) */
@@ -68,16 +70,29 @@ export interface Speech {
     /** 0…1: a stressed syllable's beat, for a nod or a squash */
     beat: number;
 }
+export interface TalkOptions {
+    /** seconds the mouth runs ahead of the sound (default 2 frames at 30 fps: the
+     * eye reads a mouth shape before the ear hears it, so lip-sync is drawn early) */
+    lead?: number;
+    /** seconds the lips stay shut before a vowel after m, b or p (default 2 frames) */
+    closed?: number;
+}
 /**
- * The mouth at `t` seconds into a line: each syllable opens in ~30 ms, holds,
- * and closes by 95% of its length (the same envelope `babble` voices), round
- * for o/u, wide for i, closed in pauses.
+ * The mouth at `t` seconds into a line (sound time): each syllable snaps open
+ * on its vowel, holds, and closes by 95% of its length (the same envelope
+ * `babble` voices), round for o/u, wide for i, closed in pauses and for the
+ * first frames after m, b or p. The mouth leads the sound by `lead` (2 frames).
  */
-export declare function talk(t: number, syl: readonly Syllable[]): Speech;
+export declare function talk(t0: number, syl: readonly Syllable[], o?: TalkOptions): Speech;
 /** A talking character's body: the jaw's small squash and a nod on every stressed syllable, over its idle. */
-export declare function talkPose(frame: number, t: number, syl: readonly Syllable[], seed?: number): CharacterPose & {
+export declare function talkPose(frame: number, t: number, syl: readonly Syllable[], seed?: number, o?: TalkOptions): CharacterPose & {
     speech: Speech;
 };
+/** Blink shapes (0 open … 1 shut), frame by frame at 30 fps: they close fast and
+ * open slowly. Regular: 2 closing, 1 shut, 4 opening. Long (with a big look,
+ * a change of thought): 3 closing, 2 shut, 5 opening. */
+export declare const BLINK: number[];
+export declare const LONG_BLINK: number[];
 export interface GazeKey {
     /** frame the look starts */
     at: number;
@@ -85,6 +100,9 @@ export interface GazeKey {
     x: number;
     /** -1 (up) … 1 (down) */
     y?: number;
+    /** follow something moving: glide from this look to the next key's (smooth
+     * pursuit), instead of holding and jumping to it */
+    pursue?: boolean;
 }
 export interface GazeOptions {
     /** where to look, from when (sorted or not) */
@@ -121,8 +139,10 @@ export interface JumpOptions {
     height?: number;
     /** frames in the air (default 16) */
     air?: number;
-    /** frames of crouch before take-off (default 5) */
+    /** frames of crouch before take-off (default 5, plus up to 3 more when heavy) */
     crouch?: number;
+    /** 0 light … 1 heavy (default 0.4): heavier squashes and stretches less, crouches longer and lands harder in the body, not the hat */
+    weight?: number;
     seed?: number;
 }
 export interface Jumping {
@@ -150,6 +170,9 @@ export interface TakeOptions {
     pop?: number;
     /** frames the extreme is held (default 2 hard, 0 soft) */
     hold?: number;
+    /** hard accents: one stretched in-between frame past the accent on the way in
+     * (the smear a fast move leaves); default true */
+    smear?: boolean;
     /** frames into the settle (default 9) */
     settle?: number;
     /** the settle, as a share of the accent (default 0.5) */
@@ -207,11 +230,37 @@ export declare function react(frame: number, at: number, kind: Reaction, o?: {
     seed?: number;
     strength?: number;
 }): Reacting;
+export interface Waddling {
+    /** degrees to rotate the body about its feet (positive leans right) */
+    angle: number;
+    /** offset up, as a share of the character's height */
+    y: number;
+    pose: CharacterPose;
+}
 /**
- * Blinks that don't tick like a metronome: one in each 2.2–4 s, at a seeded
- * moment, and sometimes a double blink. 0 open … 1 shut.
+ * A happy side-to-side waddle in place (a little dance, or a limbless walk):
+ * the body rocks about its feet, pausing at each side (it's a pose, so it
+ * holds a beat) and passing upright fast with a small bob up, the hat trailing
+ * the rock. `period` frames per full left-right cycle (default 20), `angle` the
+ * lean each side (default 10°), `from` when it starts (it eases in over half a
+ * cycle).
  */
-export declare function blinks(frame: number, seed?: number): number;
+export declare function waddle(frame: number, o?: {
+    from?: number;
+    period?: number;
+    angle?: number;
+    bob?: number;
+    seed?: number;
+}): Waddling;
+/**
+ * Blinks that don't tick like a metronome: about `perMinute` (default 14; a
+ * calm or focused character blinks less), each at a seeded moment, sometimes
+ * doubled, each closing fast and opening slowly (`BLINK`). 0 open … 1 shut.
+ */
+export declare function blinks(frame: number, seed?: number, o?: {
+    perMinute?: number;
+    fps?: number;
+}): number;
 /**
  * Idle that breathes like breathing (in slower than out), shifts its weight
  * now and then, and blinks irregularly. A drop-in for `idle`.

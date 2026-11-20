@@ -42,26 +42,37 @@ export function landing(frame, land, seed = 0, strength = 1) {
         jiggle: jiggle(dt, strength),
     };
 }
-/** A continuous hop cycle: `period` frames per hop, `height` px. y is the offset (up is negative in screen space). */
+/**
+ * A continuous hop cycle: `period` frames per hop, `height` px. y is the offset
+ * (up is negative in screen space). The landing is hit, not eased into: the
+ * body falls fastest at the contact, squashes on that frame and cushions back
+ * out; then it crouches for the next take-off (anticipation). In the air it
+ * stretches with its speed and hangs round at the top; width keeps the volume.
+ */
 export function hop(frame, period = 16, height = 70, seed = 0) {
     const t = ((((frame + seed * 3) % period) + period) % period) / period;
-    const air = Math.sin(Math.PI * t);
-    // On the ground (|t| near 0) the body squashes and springs back smoothly;
-    // in the air it stretches with its speed (most leaving and arriving, round at
-    // the top). Width follows height, so the volume holds.
-    const d = Math.min(t, 1 - t);
-    const squash = d < 0.16 ? 0.18 * Math.cos((d / 0.16) * (Math.PI / 2)) ** 2 : 0;
-    const s = Math.min(1, Math.max(0, (d - 0.04) / 0.22));
-    const stretch = 0.1 * Math.abs(Math.cos(Math.PI * t)) * s * s * (3 - 2 * s);
+    const G = 0.24; // share of the cycle on the ground
+    let y = 0, squash = 0, stretch = 0, air = 0;
+    if (t < G) {
+        const g = t / G;
+        // 0 … 0.55: cushion out of the landing squash; 0.55 … 1: crouch for take-off.
+        squash = g < 0.55 ? 0.2 * (1 - Math.sin((g / 0.55) * (Math.PI / 2))) + 0.06 * (g / 0.55) : 0.06 + 0.06 * Math.sin(((g - 0.55) / 0.45) * (Math.PI / 2));
+    }
+    else {
+        const u = (t - G) / (1 - G);
+        air = 4 * u * (1 - u);
+        y = -height * air;
+        stretch = 0.12 * Math.abs(1 - 2 * u) ** 1.5;
+    }
     const squashY = 1 - squash + stretch;
     return {
-        y: -height * air,
+        y,
         pose: {
             squashY,
             squashX: Math.pow(squashY, -0.7),
             tilt: -14 * Math.cos(TAU * (t - 0.18)),
             lift: 3 * air,
-            blink: d < 0.06 ? 0.6 : blinkAt(frame, seed),
+            blink: t < G * 0.3 ? 0.6 : blinkAt(frame, seed),
             jiggle: jiggle(frame % period, 0.8),
         },
     };

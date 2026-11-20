@@ -14,7 +14,7 @@
  * - squash keeps the body's volume (`keepVolume`).
  *
  * Frames are at the stage's fps (default 30); times in a speech are seconds. */
-import { idle, jiggle, landing } from "./motion.js";
+import { jiggle, landing } from "./motion.js";
 /** A deterministic hash of two integers into [0, 1). */
 export function hash01(a, b = 0) {
     let h = Math.imul((a | 0) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul((b | 0) + 0x632be5ab, 0xc2b2ae35);
@@ -48,7 +48,10 @@ function wordSyllables(word) {
         if (last[0] === "e" && last.index === w.length - 1 && !/le$/.test(w))
             groups.pop();
     }
-    return groups.map((g) => ({ text: g[0], vowel: VOWEL_OF[g[0][0] === "y" && g[0].length > 1 ? g[0][1] : g[0][0]] ?? "e" }));
+    return groups.map((g, i) => {
+        const from = i === 0 ? 0 : groups[i - 1].index + groups[i - 1][0].length;
+        return { text: g[0], vowel: VOWEL_OF[g[0][0] === "y" && g[0].length > 1 ? g[0][1] : g[0][0]] ?? "e", onset: w.slice(from, g.index).replace(/[^a-z]/g, "") };
+    });
 }
 /**
  * A line of words as timed syllables. English: one per vowel group; Chinese,
@@ -62,7 +65,7 @@ export function syllables(text, o = {}) {
     let t = 0, n = 0;
     const say = (s, stress) => {
         const len = (1 / rate) * (0.75 + 0.5 * hash01(seed, n)) * (stress ? 1.25 : 1);
-        out.push({ t0: t, t1: t + len, vowel: s.vowel, stress, text: s.text });
+        out.push({ t0: t, t1: t + len, vowel: s.vowel, stress, text: s.text, ...(s.onset ? { onset: s.onset } : {}) });
         t += len;
         n++;
     };
@@ -105,11 +108,13 @@ export function syllables(text, o = {}) {
 /** How long a line of syllables lasts (seconds). */
 export const speechLength = (syl) => (syl.length ? syl[syl.length - 1].t1 : 0);
 /**
- * The mouth at `t` seconds into a line: each syllable opens in ~30 ms, holds,
- * and closes by 95% of its length (the same envelope `babble` voices), round
- * for o/u, wide for i, closed in pauses.
+ * The mouth at `t` seconds into a line (sound time): each syllable snaps open
+ * on its vowel, holds, and closes by 95% of its length (the same envelope
+ * `babble` voices), round for o/u, wide for i, closed in pauses and for the
+ * first frames after m, b or p. The mouth leads the sound by `lead` (2 frames).
  */
-export function talk(t, syl) {
+export function talk(t0, syl, o = {}) {
+    const t = t0 + (o.lead ?? 2 / 30);
     const end = speechLength(syl);
     let s;
     for (const x of syl)
@@ -118,19 +123,31 @@ export function talk(t, syl) {
     if (!s)
         return { open: 0, vowel: "m", mouth: "closed", talking: t >= 0 && t < end, beat: 0 };
     const len = s.t1 - s.t0, u = (t - s.t0) / len;
-    const env = u < 0.03 / len ? (u * len) / 0.03 : u < 0.6 ? 1 : Math.max(0, 1 - (u - 0.6) / 0.35);
+    // m, b, p: the lips meet before the vowel (at least 2 frames shut).
+    if (s.onset && /[mbp]$/.test(s.onset) && t - s.t0 < (o.closed ?? 2 / 30))
+        return { open: 0, vowel: s.vowel, mouth: "closed", talking: true, beat: 0 };
+    const env = u < 0.6 ? 1 : Math.max(0, 1 - (u - 0.6) / 0.35); // vowels pop open, no in-between
     const peak = s.vowel === "m" ? 0.15 : s.stress ? 1 : 0.75;
     const open = env * peak;
     const mouth = open < 0.2 ? "closed" : s.vowel === "o" || s.vowel === "u" ? "round" : s.vowel === "i" ? "wide" : "open";
     return { open, vowel: s.vowel, mouth, talking: true, beat: s.stress ? env * (1 - u) : 0 };
 }
 /** A talking character's body: the jaw's small squash and a nod on every stressed syllable, over its idle. */
-export function talkPose(frame, t, syl, seed = 0) {
-    const sp = talk(t, syl);
-    const i = idle(frame, seed);
-    const squashY = i.squashY + 0.025 * sp.open - 0.03 * sp.beat;
-    return { ...i, squashY, squashX: i.squashX * keepVolume(squashY / i.squashY), tilt: i.tilt + 5 * sp.beat, speech: sp };
+export function talkPose(frame, t, syl, seed = 0, o = {}) {
+    const sp = talk(t, syl, o);
+    // The head's beat leads the sound further than the mouth (3–4 frames).
+    const ahead = talk(t + 2 / 30, syl, o);
+    const i = alive(frame, seed);
+    // Talking is in the mouth: the body barely moves (a small jaw squash, a nod on stresses).
+    const squashY = i.squashY + 0.015 * sp.open - 0.03 * ahead.beat;
+    return { ...i, squashY, squashX: i.squashX * keepVolume(squashY / i.squashY), tilt: i.tilt + 5 * ahead.beat, speech: sp };
 }
+// ── Eyes ──────────────────────────────────────────────────────────────────
+/** Blink shapes (0 open … 1 shut), frame by frame at 30 fps: they close fast and
+ * open slowly. Regular: 2 closing, 1 shut, 4 opening. Long (with a big look,
+ * a change of thought): 3 closing, 2 shut, 5 opening. */
+export const BLINK = [0.55, 1, 1, 0.7, 0.4, 0.15, 0.04];
+export const LONG_BLINK = [0.35, 0.75, 1, 1, 1, 0.75, 0.5, 0.3, 0.12, 0.03];
 /**
  * Eyes that jump and hold, the way eyes do: each look is a saccade of a few
  * frames, then a hold with small drifts (every 1.2–2.5 s, never in the first
@@ -149,14 +166,22 @@ export function gaze(frame, o = {}) {
         return k ?? { at: -Infinity, x: 0, y: 0 };
     };
     const from = Math.min(keys[0]?.at ?? 0, frame) - 240;
-    for (const k of keys)
+    // Pursuit: a look marked `pursue` glides to the next key's, in small steps every frame.
+    keys.forEach((k, i) => {
         steps.push({ at: k.at, x: k.x, y: k.y ?? 0 });
+        const next = keys[i + 1];
+        if (k.pursue && next)
+            for (let f = k.at + 1; f < next.at; f++) {
+                const u = (f - k.at) / (next.at - k.at);
+                steps.push({ at: f, x: k.x + (next.x - k.x) * u, y: (k.y ?? 0) + ((next.y ?? 0) - (k.y ?? 0)) * u });
+            }
+    });
     if (wander > 0) {
         const SLOT = 55;
         for (let s = Math.floor(from / SLOT); s * SLOT <= frame; s++) {
             const at = s * SLOT + Math.floor(hash01(seed, s) * 20);
             const b = base(at);
-            if (at - b.at < 20)
+            if (at - b.at < 20 || b.pursue)
                 continue;
             steps.push({ at, x: clamp(b.x + (hash01(seed + 31, s) - 0.5) * 2 * wander, -1, 1), y: clamp((b.y ?? 0) + (hash01(seed + 57, s) - 0.5) * wander, -1, 1) });
         }
@@ -188,8 +213,12 @@ export function gaze(frame, o = {}) {
             const z = 0.75, wd = w * Math.sqrt(1 - z * z);
             head += dx * (1 - Math.exp(-z * w * th) * (Math.cos(wd * th) + (z / Math.sqrt(1 - z * z)) * Math.sin(wd * th)));
         }
-        if (Math.abs(dx) > 0.7 && frame - s.at < 3)
-            blink = Math.max(blink, frame - s.at < 2 ? 1 : 0.5);
+        // A blink with a big look, starting with it (people blink on almost every
+        // large gaze shift): a long blink, 3 closing, 2 shut, 4 opening. Mid-sized
+        // looks blink sometimes, more often the bigger they are.
+        const ad = Math.abs(dx), e = frame - s.at;
+        if (e >= 0 && e < LONG_BLINK.length && (ad >= 0.5 || (ad >= 0.3 && hash01(seed + 7, s.at) < (ad - 0.3) / 0.2)))
+            blink = Math.max(blink, LONG_BLINK[e]);
         px = s.x;
         py = s.y;
     }
@@ -201,20 +230,21 @@ export function gaze(frame, o = {}) {
  * how hard it came down. Volume kept throughout.
  */
 export function jump(frame, at, o = {}) {
-    const H = o.height ?? 120, air = Math.max(4, o.air ?? 16), crouch = Math.max(1, o.crouch ?? 5), seed = o.seed ?? 0;
+    const wt = Math.min(1, Math.max(0, o.weight ?? 0.4)), give = 1.3 - 0.75 * wt; // how much it squashes and stretches
+    const H = o.height ?? 120, air = Math.max(4, o.air ?? 16), crouch = Math.max(1, o.crouch ?? 5 + Math.round(3 * Math.max(0, wt - 0.4) / 0.6)), seed = o.seed ?? 0;
     const off = at + crouch, land = off + air;
-    const i = idle(frame, seed);
+    const i = alive(frame, seed);
     if (frame < at)
         return { y: 0, pose: i, contact: false, phase: "before" };
     if (frame < off) {
         const u = smooth((frame - at) / crouch);
-        const sy = 1 - 0.16 * u;
+        const sy = 1 - 0.13 * give * u;
         return { y: 0, pose: { ...i, squashY: sy, squashX: keepVolume(sy), tilt: i.tilt + 4 * u, lift: -1.5 * u, blink: 0 }, contact: frame >= off - 1, phase: "crouch" };
     }
     if (frame < land) {
         const u = (frame - off) / air;
         const v = 1 - 2 * u; // up +1 … down -1
-        const sy = 1 + 0.16 * Math.abs(v) ** 1.5; // stretched by speed, round at the top
+        const sy = 1 + 0.13 * give * Math.abs(v) ** 1.5; // stretched by speed, round at the top
         return {
             y: -H * 4 * u * (1 - u),
             pose: { squashY: sy, squashX: keepVolume(sy), tilt: -12 * v, lift: 3 * v, blink: 0, jiggle: jiggle(frame - off, 0.5) },
@@ -222,7 +252,7 @@ export function jump(frame, at, o = {}) {
             phase: "air",
         };
     }
-    const strength = Math.min(1.4, 0.5 + H / 250);
+    const strength = Math.min(1.4, (0.5 + H / 250) * give);
     const p = landing(frame, land, seed, strength);
     return { y: 0, pose: { ...p, squashX: keepVolume(p.squashY / i.squashY) * i.squashX }, contact: frame - land <= 2, phase: "landed" };
 }
@@ -247,6 +277,9 @@ export function takeCurve(dt, o = {}) {
     // Out of the start gently, into the anticipation pose slowly (ease-in-out, weighted to the end).
     if (dt < t1)
         return { v: -depth * (1 - Math.pow(1 - smooth(dt / t1), 1.6)), phase: "antic", pop: t2 };
+    // The smear: the first frame out of the anticipation overshoots the accent, stretched along the move.
+    if (hard && (o.smear ?? true) && dt === t1)
+        return { v: 1.3, phase: "accent", pop: t2 };
     if (dt < t2) {
         const u = (dt - t1 + 1) / pop; // hard: the very next frame is the accent
         return { v: -depth + (1 + depth) * (hard ? Math.min(1, u) : 1 - Math.pow(1 - Math.min(1, u), 3)), phase: "accent", pop: t2 };
@@ -282,7 +315,7 @@ export const REACTION_FRAMES = {
 };
 /** A surprise pose from a take's value: squashed and squinting in the anticipation; tall, wide-eyed, hat up at the accent. */
 function surprisePose(frame, dt, v, pop, k, seed) {
-    const i = idle(frame, seed);
+    const i = alive(frame, seed);
     const sy = 1 + 0.2 * k * v;
     const up = Math.max(0, v);
     return {
@@ -311,7 +344,7 @@ function surprisePose(frame, dt, v, pop, k, seed) {
 export function react(frame, at, kind, o = {}) {
     const seed = o.seed ?? 0, k = o.strength ?? 1;
     const dt = frame - at;
-    const i = idle(frame, seed);
+    const i = alive(frame, seed);
     const done = dt >= REACTION_FRAMES[kind];
     if (dt < 0 || done)
         return { y: 0, pose: i, contact: false, done };
@@ -364,24 +397,53 @@ export function react(frame, at, kind, o = {}) {
     const s = Math.sin(dt * 0.95) * fade;
     return { y: 0, pose: { ...i, tilt: i.tilt + 9 * k * s, jiggle: 3 * s }, lookX: -0.7 * s, mouth: "closed", contact: false, done };
 }
+/**
+ * A happy side-to-side waddle in place (a little dance, or a limbless walk):
+ * the body rocks about its feet, pausing at each side (it's a pose, so it
+ * holds a beat) and passing upright fast with a small bob up, the hat trailing
+ * the rock. `period` frames per full left-right cycle (default 20), `angle` the
+ * lean each side (default 10°), `from` when it starts (it eases in over half a
+ * cycle).
+ */
+export function waddle(frame, o = {}) {
+    const from = o.from ?? 0, P = o.period ?? 20, A = o.angle ?? 10, bob = o.bob ?? 0.03, seed = o.seed ?? 0;
+    const i = alive(frame, seed);
+    const dt = frame - from;
+    if (dt < 0)
+        return { angle: 0, y: 0, pose: i };
+    const ramp = smooth(dt / (P / 2));
+    const ph = (TAU_A * dt) / P;
+    // A squared sine: lingers at the sides, quick through the middle.
+    const s = Math.sin(ph), lean = Math.sign(s) * Math.abs(s) ** 0.6;
+    const upright = 1 - Math.abs(s);
+    const sy = i.squashY + 0.03 * upright * ramp;
+    return {
+        angle: A * lean * ramp,
+        y: -bob * upright ** 2 * ramp,
+        pose: { ...i, squashY: sy, squashX: keepVolume(sy), tilt: i.tilt - 0.8 * A * Math.sin(ph - 0.6) * ramp, blink: i.blink },
+    };
+}
+const TAU_A = Math.PI * 2;
 // ── Life ──────────────────────────────────────────────────────────────────
 /**
- * Blinks that don't tick like a metronome: one in each 2.2–4 s, at a seeded
- * moment, and sometimes a double blink. 0 open … 1 shut.
+ * Blinks that don't tick like a metronome: about `perMinute` (default 14; a
+ * calm or focused character blinks less), each at a seeded moment, sometimes
+ * doubled, each closing fast and opening slowly (`BLINK`). 0 open … 1 shut.
  */
-export function blinks(frame, seed = 0) {
-    const SLOT = 90;
+export function blinks(frame, seed = 0, o = {}) {
+    const SLOT = Math.round(((o.fps ?? 30) * 60) / (o.perMinute ?? 14));
     const s = Math.floor(frame / SLOT);
+    let v = 0;
     for (const slot of [s, s - 1]) {
-        const at = slot * SLOT + Math.floor(hash01(seed + 101, slot) * 60);
+        const at = slot * SLOT + Math.floor(hash01(seed + 101, slot) * SLOT * 0.6);
         const dts = [frame - at];
-        if (hash01(seed + 202, slot) < 0.25)
-            dts.push(frame - at - 6);
+        if (hash01(seed + 202, slot) < 0.2)
+            dts.push(frame - at - 9);
         for (const dt of dts)
-            if (dt >= 0 && dt < 4)
-                return dt < 2 ? 1 : 0.5;
+            if (dt >= 0 && dt < BLINK.length)
+                v = Math.max(v, BLINK[dt]);
     }
-    return 0;
+    return v;
 }
 /**
  * Idle that breathes like breathing (in slower than out), shifts its weight
@@ -393,6 +455,7 @@ export function alive(frame, seed = 0) {
     const sy = 1 + 0.025 * b;
     const shift = Math.sin((frame + seed * 41) / 47) * Math.sin((frame + seed * 13) / 83);
     const bl = blinks(frame, seed);
-    return { squashY: sy - 0.01 * bl, squashX: keepVolume(sy), tilt: 2.2 * Math.sin((frame + seed * 5) / 15) + 3 * shift, lift: 0, blink: bl, jiggle: 0 };
+    // Kept small: a held pose has to read, so idle is mostly breath, not sway.
+    return { squashY: sy - 0.01 * bl, squashX: keepVolume(sy), tilt: 1.4 * Math.sin((frame + seed * 5) / 15) + 1.8 * shift, lift: 0, blink: bl, jiggle: 0 };
 }
 //# sourceMappingURL=acting.js.map

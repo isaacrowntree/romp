@@ -3,6 +3,41 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.11.0] — 2026-11-20
+
+Tuned against reference. Studying slapstick reference frame by frame (how long
+poses hold, how fast moves between them are, how eyes follow a moving thing,
+how a limbless body walks) and reading the classic texts (Williams on holds,
+lip-sync and accents; Lasseter's SIGGRAPH 1987 principles; Disney Research on
+blinks) found romp's characters moving too much between poses, mouths in step
+with the sound instead of ahead of it, blinks shaped symmetrically and too
+often, and a hop that eased into its landing.
+
+### Added
+- **Lip-sync lead**: `talk(t, syl, { lead })` shows the mouth 2 frames before
+  the sound by default; `talkPose`'s nod leads by 4. Syllables carry their
+  `onset`, and m, b and p keep the lips shut for 2 frames before the vowel.
+  Vowels pop open with no in-between.
+- **Pursuit**: a gaze key with `pursue: true` glides the eyes to the next key
+  (following something moving) instead of holding and jumping.
+- **`waddle(frame, { period, angle, bob })`**: a limbless walk or happy dance,
+  rocking about the feet, lingering at each side, bobbing up through upright.
+- `jump({ weight })`: 0 light … 1 heavy; heavier squashes and stretches less
+  and crouches longer.
+- Hard takes draw one **smear** frame (stretched past the accent) on the way in
+  (`takeCurve({ smear })`, on by default).
+- `BLINK` and `LONG_BLINK`: blink shapes, closing fast and opening slowly.
+
+### Changed
+- `blinks()`: 2 frames closing, 1 shut, 4 opening (was 2 shut, 2 half), about
+  14 a minute (was 15–27; `perMinute`), doubles less often.
+- `gaze()`: a big look brings a long blink (3 closing, 2 shut, 5 opening) from
+  its first frame; mid-sized looks blink sometimes, more often the bigger they are.
+- `hop()`: falls fastest into the ground and squashes on the contact frame,
+  cushions out, then crouches for the next take-off (it eased into the contact).
+- `alive()`: less sway (holds read), and `talkPose()` moves the body less.
+- `talkPose`, `jump`, `react` and `waddle` breathe and blink with `alive()` (they used `idle()`'s metronome blinks).
+
 ## [0.10.0] — 2026-11-20
 
 Reactions built the way character animators build them. Reading how a take is

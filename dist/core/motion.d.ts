@@ -32,7 +32,13 @@ export declare function jiggle(dt: number, strength?: number): number;
 export declare function jiggleParts(parts: readonly string[], dt: number, strength?: number, lag?: number): Record<string, number>;
 /** After a landing at frame `land`: squash then wobble back, the hat following through. Before it: stretched in the fall. */
 export declare function landing(frame: number, land: number, seed?: number, strength?: number): CharacterPose;
-/** A continuous hop cycle: `period` frames per hop, `height` px. y is the offset (up is negative in screen space). */
+/**
+ * A continuous hop cycle: `period` frames per hop, `height` px. y is the offset
+ * (up is negative in screen space). The landing is hit, not eased into: the
+ * body falls fastest at the contact, squashes on that frame and cushions back
+ * out; then it crouches for the next take-off (anticipation). In the air it
+ * stretches with its speed and hangs round at the top; width keeps the volume.
+ */
 export declare function hop(frame: number, period?: number, height?: number, seed?: number): {
     y: number;
     pose: CharacterPose;

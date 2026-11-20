@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alive, blinks, gaze, hop, jump, keepVolume, react, REACTION_FRAMES, speechLength, syllables, takeCurve, takeLength, talk, talkPose } from "../src/core/index.js";
+import { alive, BLINK, blinks, gaze, hop, jump, keepVolume, react, REACTION_FRAMES, speechLength, syllables, takeCurve, takeLength, talk, talkPose, waddle } from "../src/core/index.js";
 
 describe("syllables", () => {
   it("counts English vowel groups, with a word-final silent e joining the one before", () => {
@@ -43,7 +43,7 @@ describe("talk", () => {
   });
   it("rounds the mouth on o", () => {
     const o = syllables("go");
-    expect(talk((o[0].t0 + o[0].t1) / 2, o).mouth).toBe("round");
+    expect(talk((o[0].t0 + o[0].t1) / 2, o, { lead: 0 }).mouth).toBe("round");
   });
   it("gives a body that nods on stresses and keeps its volume", () => {
     const p = talkPose(10, (s[0].t0 + s[0].t1) / 2, s, 1);
@@ -60,8 +60,9 @@ describe("gaze", () => {
     expect(gaze(40, { keys, wander: 0 }).x).toBeCloseTo(1, 6);
   });
   it("blinks with a big change of look", () => {
-    expect(gaze(60, { keys, wander: 0 }).blink).toBe(1);
-    expect(gaze(70, { keys, wander: 0 }).blink).toBe(0);
+    expect(gaze(60, { keys, wander: 0 }).blink).toBeGreaterThan(0.3); // closing with the look
+    expect(gaze(62, { keys, wander: 0 }).blink).toBe(1);
+    expect(gaze(72, { keys, wander: 0 }).blink).toBe(0);
   });
   it("turns the head after the eyes", () => {
     const g = gaze(13, { keys, wander: 0 });
@@ -124,9 +125,10 @@ describe("react", () => {
 describe("life", () => {
   it("blinks irregularly: not at a fixed period", () => {
     const starts: number[] = [];
-    for (let f = 1; f < 2000; f++) if (blinks(f, 3) === 1 && blinks(f - 1, 3) === 0) starts.push(f);
+    for (let f = 1; f < 4000; f++) if (blinks(f, 3) > 0 && blinks(f - 1, 3) === 0) starts.push(f);
     const gaps = new Set(starts.slice(1).map((s, i) => s - starts[i]));
-    expect(starts.length).toBeGreaterThan(15);
+    expect(starts.length).toBeGreaterThan(20); // ~14 a minute over 133 s
+    expect(starts.length).toBeLessThan(45);
     expect(gaps.size).toBeGreaterThan(5);
   });
   it("breathes with its volume kept", () => {
@@ -135,8 +137,16 @@ describe("life", () => {
       expect(Math.abs(p.squashY - 1)).toBeLessThan(0.04);
     }
   });
-  it("hop squashes smoothly at contact (no one-frame switch)", () => {
-    for (let f = 1; f < 32; f++) expect(Math.abs(hop(f, 16).pose.squashY - hop(f - 1, 16).pose.squashY)).toBeLessThan(0.13);
+  it("hop hits its landing: squashed on the contact frame, then cushioned out", () => {
+    const land = hop(16, 16).pose.squashY; // t = 0: the contact
+    expect(land).toBeLessThan(0.85);
+    expect(hop(17, 16).pose.squashY).toBeGreaterThan(land);
+    expect(hop(16, 16).y).toBe(0);
+    expect(hop(15, 16).y).toBeLessThan(0); // still falling the frame before
+  });
+  it("closes fast and opens slowly", () => {
+    const close = BLINK.indexOf(1), open = BLINK.length - 1 - [...BLINK].reverse().indexOf(1);
+    expect(close).toBeLessThan(BLINK.length - 1 - open);
   });
 });
 
@@ -146,7 +156,7 @@ describe("takes", () => {
     expect(takeCurve(5).phase).toBe("antic");
     const { pop } = takeCurve(0);
     expect(pop).toBe(7);
-    expect(takeCurve(pop - 1).v).toBe(1); // the anticipation's end is the accent's first frame
+    expect(takeCurve(pop - 1).v).toBeGreaterThan(1); // the smear: one stretched frame past the accent
     expect(takeCurve(pop).v).toBe(1);
     expect(takeCurve(pop + 1).v).toBe(1); // held a couple of frames
   });
@@ -202,5 +212,38 @@ describe("gaze anticipation", () => {
     expect(Math.max(...h)).toBeGreaterThan(1);
     expect(Math.max(...h)).toBeLessThan(1.1);
     expect(h[59]).toBeCloseTo(1, 2);
+  });
+});
+
+describe("feel (0.11)", () => {
+  it("the mouth leads the sound by 2 frames", () => {
+    const s = syllables("hello");
+    expect(talk(-1 / 30, s).open).toBeGreaterThan(0); // already open before the sound starts
+    expect(talk(-1 / 30, s, { lead: 0 }).open).toBe(0);
+  });
+  it("m, b and p shut the lips before their vowel", () => {
+    const s = syllables("ma");
+    expect(s[0].onset).toBe("m");
+    expect(talk(s[0].t0 + 0.01, s, { lead: 0 }).mouth).toBe("closed");
+    expect(talk(s[0].t0 + 0.08, s, { lead: 0 }).mouth).not.toBe("closed");
+  });
+  it("pursuit glides the eyes after a moving thing instead of jumping", () => {
+    const keys = [{ at: 0, x: -1, pursue: true }, { at: 30, x: 1 }];
+    const xs = Array.from({ length: 31 }, (_, f) => gaze(f, { keys, wander: 0 }).x);
+    expect(xs[15]).toBeGreaterThan(-0.3);
+    expect(xs[15]).toBeLessThan(0.3);
+    for (let f = 5; f < 30; f++) expect(Math.abs(xs[f] - xs[f - 1])).toBeLessThan(0.12);
+  });
+  it("a waddle rocks about the feet, lingers at each side and bobs up through the middle", () => {
+    const a = Array.from({ length: 60 }, (_, f) => waddle(f, { period: 20, angle: 10 }));
+    expect(Math.max(...a.map((w) => w.angle))).toBeGreaterThan(9);
+    expect(Math.min(...a.map((w) => w.angle))).toBeLessThan(-9);
+    const near = a.slice(20).filter((w) => Math.abs(w.angle) > 8).length;
+    expect(near).toBeGreaterThan(14); // more than half the time near a side
+    expect(Math.min(...a.map((w) => w.y))).toBeLessThan(0);
+  });
+  it("a heavy jump squashes and stretches less than a light one", () => {
+    const land = (weight: number) => Math.min(...Array.from({ length: 40 }, (_, f) => jump(f, 0, { weight }).pose.squashY));
+    expect(land(1)).toBeGreaterThan(land(0));
   });
 });

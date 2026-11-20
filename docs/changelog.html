@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap" />
     <link rel="stylesheet" href="style.css?v=74e241cc" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.10.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
+      {"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"romp","description":"Physics-baked character motion, a motion check and synthesised sound for videos made in code — Remotion, three.js or any seek(t) page, played live or rendered frame by frame.","url":"https://isaacrowntree.com/romp/","codeRepository":"https://github.com/isaacrowntree/romp","programmingLanguage":"TypeScript","license":"https://opensource.org/licenses/MIT","version":"0.11.0","author":{"@type":"Person","name":"Isaac Rowntree","url":"https://isaacrowntree.com/"},"keywords":"animation, motion, physics, box2d, planck, remotion, three.js, video, motion-graphics, squash-and-stretch, web-audio, synthesis, sound-design, mascot, character-animation, deterministic, motion-check, particles, confetti, lottie, theatre.js, motion-canvas, audio-reactive, captions, subtitles, safe-area, text-timing"}
     </script>
   </head>
   <body>
@@ -44,6 +44,25 @@
     <main id="main"><div class="shell">
 <section class="hero"><h1>Changelog</h1><p class="hero__lede">Every release, newest first. Versions follow SemVer.</p></section>
 <div class="prose changelog"><p>All notable changes to this project are documented here. Format follows <a href="https://keepachangelog.com/">Keep a Changelog</a>; versions follow <a href="https://semver.org/">SemVer</a>.</p>
+<h2 id="0-11-0-2026-11-20">[0.11.0] — 2026-11-20</h2>
+<p>Tuned against reference. Studying slapstick reference frame by frame (how long poses hold, how fast moves between them are, how eyes follow a moving thing, how a limbless body walks) and reading the classic texts (Williams on holds, lip-sync and accents; Lasseter's SIGGRAPH 1987 principles; Disney Research on blinks) found romp's characters moving too much between poses, mouths in step with the sound instead of ahead of it, blinks shaped symmetrically and too often, and a hop that eased into its landing.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong>Lip-sync lead</strong>: <code>talk(t, syl, { lead })</code> shows the mouth 2 frames before the sound by default; <code>talkPose</code>'s nod leads by 4. Syllables carry their <code>onset</code>, and m, b and p keep the lips shut for 2 frames before the vowel. Vowels pop open with no in-between.</li>
+<li><strong>Pursuit</strong>: a gaze key with <code>pursue: true</code> glides the eyes to the next key (following something moving) instead of holding and jumping.</li>
+<li><strong><code>waddle(frame, { period, angle, bob })</code></strong>: a limbless walk or happy dance, rocking about the feet, lingering at each side, bobbing up through upright.</li>
+<li><code>jump({ weight })</code>: 0 light … 1 heavy; heavier squashes and stretches less and crouches longer.</li>
+<li>Hard takes draw one <strong>smear</strong> frame (stretched past the accent) on the way in (<code>takeCurve({ smear })</code>, on by default).</li>
+<li><code>BLINK</code> and <code>LONG_BLINK</code>: blink shapes, closing fast and opening slowly.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><code>blinks()</code>: 2 frames closing, 1 shut, 4 opening (was 2 shut, 2 half), about 14 a minute (was 15–27; <code>perMinute</code>), doubles less often.</li>
+<li><code>gaze()</code>: a big look brings a long blink (3 closing, 2 shut, 5 opening) from its first frame; mid-sized looks blink sometimes, more often the bigger they are.</li>
+<li><code>hop()</code>: falls fastest into the ground and squashes on the contact frame, cushions out, then crouches for the next take-off (it eased into the contact).</li>
+<li><code>alive()</code>: less sway (holds read), and <code>talkPose()</code> moves the body less.</li>
+<li><code>talkPose</code>, <code>jump</code>, <code>react</code> and <code>waddle</code> breathe and blink with <code>alive()</code> (they used <code>idle()</code>'s metronome blinks).</li>
+</ul>
 <h2 id="0-10-0-2026-11-20">[0.10.0] — 2026-11-20</h2>
 <p>Reactions built the way character animators build them. Reading how a take is timed (School of Motion's take breakdown, The Animator's Survival Kit on hard and soft accents) and how Illumination's animators describe the Minions (emotion from clear poses and attitude, like a silent film, with some stiffness kept) showed what 0.9's reactions lacked: no accent held on its extreme, no bounce back into a held settle, and no double takes, acting blinks or moving holds.</p>
 <h3 id="added">Added</h3>
@@ -227,6 +246,6 @@
 <li>Live demo page in <code>docs/</code> and a generated hero GIF.</li>
 </ul></div>
     </div></main>
-    <footer class="foot"><div class="shell">romp 0.10.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
+    <footer class="foot"><div class="shell">romp 0.11.0 · MIT · <a href="https://github.com/isaacrowntree/romp">github.com/isaacrowntree/romp</a> · by <a href="https://isaacrowntree.com/">Isaac Rowntree</a></div></footer>
   </body>
 </html>
