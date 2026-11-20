@@ -205,10 +205,11 @@ export function talkPose(frame, t, syl, seed = 0, o = {}) {
 }
 // ── Eyes ──────────────────────────────────────────────────────────────────
 /** Blink shapes (0 open … 1 shut), frame by frame at 30 fps: they close fast and
- * open slowly. Regular: 2 closing, 1 shut, 4 opening. Long (with a big look,
- * a change of thought): 3 closing, 2 shut, 5 opening. */
-export const BLINK = [0.55, 1, 1, 0.7, 0.4, 0.15, 0.04];
-export const LONG_BLINK = [0.35, 0.75, 1, 1, 1, 0.75, 0.5, 0.3, 0.12, 0.03];
+ * open a little slower, and stay short (a blink of 5 frames already reads as
+ * sleepy). Regular: half, shut 2, half, nearly open. Long (with a big look, a
+ * change of thought): 2 closing, 2 shut, 3 opening. */
+export const BLINK = [0.5, 1, 1, 0.45, 0.1];
+export const LONG_BLINK = [0.4, 0.8, 1, 1, 0.6, 0.3, 0.1];
 /**
  * Eyes that jump and hold, the way eyes do: each look is a saccade of a few
  * frames, then a hold with small drifts (every 1.2–2.5 s, never in the first
@@ -315,12 +316,14 @@ export function jump(frame, at, o = {}) {
         return {
             y: -H * 4 * u * (1 - u),
             // The hat drags 2 frames behind the body (follow-through).
-            pose: { squashY: sy, squashX: keepVolume(sy), tilt: -12 * (1 - 2 * Math.max(0, frame - 2 - off) / air), lift: 3 * (1 - 2 * Math.max(0, frame - 2 - off) / air), blink: 0, jiggle: jiggle(frame - off, 0.5) },
+            // Drag: rising, the hat is pressed down onto the head; falling, it floats up off it (2 frames behind the body).
+            pose: { squashY: sy, squashX: keepVolume(sy), tilt: -8 * (1 - 2 * Math.max(0, frame - 2 - off) / air), lift: -3 * (1 - 2 * Math.max(0, frame - 2 - off) / air), blink: 0, jiggle: jiggle(frame - off, 0.5) },
             contact: frame - off <= 1,
             phase: "air",
         };
     }
-    const strength = Math.min(1.4, (0.5 + H / 250) * give);
+    // A hop lands softly; only a long fall hits hard (the squash never flattens it).
+    const strength = Math.min(1.0, (0.4 + H / 400) * give);
     const p = landing(frame, land, seed, strength);
     return { y: 0, pose: { ...p, squashX: keepVolume(p.squashY / i.squashY) * i.squashX }, contact: frame - land <= 2, phase: "landed" };
 }
@@ -392,12 +395,12 @@ export const REACTION_FRAMES = {
 };
 /**
  * A loose part following a curve: a damped spring (about 0.55 rad a frame,
- * damping 0.45) pulled toward the curve's value one frame late, stepped frame
+ * damping 0.6: ~10% overshoot, settled in ~8 frames) pulled toward the curve's value one frame late, stepped frame
  * by frame from rest. It lags the body, carries past it, and settles: drag and
  * follow-through. Pure: the same curve gives the same result at any frame.
  */
 export function follow(curve, frame, o = {}) {
-    const w = o.w ?? 0.55, z = o.zeta ?? 0.45, d = o.delay ?? 1, from = o.from ?? Math.min(frame, 0) - 2;
+    const w = o.w ?? 0.55, z = o.zeta ?? 0.6, d = o.delay ?? 1, from = o.from ?? Math.min(frame, 0) - 2;
     let x = curve(from - d), v = 0;
     for (let f = from + 1; f <= frame; f++) {
         const target = curve(f - d);
@@ -415,16 +418,17 @@ function surprisePose(frame, dt, o, k, seed) {
     const c = takeCurve(dt, o);
     const v = c.v, pop = c.pop;
     const antic = Math.max(0, -v), up = Math.max(0, v);
-    const sy = (v < 0 ? 1 - 0.375 * k * antic : 1 + 0.2 * k * up) + 0.15 * k * c.smear;
+    const sy = (v < 0 ? 1 - 0.375 * k * antic : 1 + 0.2 * k * up) + 0.06 * k * c.smear;
     const hat = follow((f) => takeCurve(f, o).v, dt);
     const eyes = dt >= pop ? 1.1 + 0.15 * Math.exp(-(dt - pop) / 4) : c.smear ? 1.15 : 1;
     return {
         y: v < 0 ? 0.1 * k * antic : -0.12 * k * up,
         pose: {
             squashY: sy,
-            squashX: keepVolume(sy) * (c.smear ? 0.9 : 1),
-            tilt: i.tilt - 9 * k * hat,
-            lift: hat >= 0 ? 7 * k * hat : 4 * k * hat,
+            squashX: keepVolume(sy) * (c.smear ? 0.92 : 1),
+            // The hat rocks on the head and stays on it: at most 12° and 4 units of lift.
+            tilt: i.tilt + clamp(-9 * k * hat, -12, 12),
+            lift: clamp(hat >= 0 ? 5 * k * hat : 3 * k * hat, -3, 4),
             blink: v < 0 ? Math.min(1, 1.5 * antic) : 0,
             jiggle: dt >= pop - 2 ? jiggle(dt - (pop - 2), k) : 0,
         },
@@ -561,7 +565,7 @@ export function blinks(frame, seed = 0, o = {}) {
     for (const slot of [s, s - 1]) {
         const at = slot * SLOT + Math.floor(hash01(seed + 101, slot) * SLOT * 0.6);
         const dts = [frame - at];
-        if (hash01(seed + 202, slot) < 0.2)
+        if (hash01(seed + 202, slot) < 0.1)
             dts.push(frame - at - 9);
         for (const dt of dts)
             if (dt >= 0 && dt < BLINK.length)

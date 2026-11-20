@@ -113,8 +113,9 @@ export declare function talkPose(frame: number, t: number, syl: readonly Syllabl
     speech: Speech;
 };
 /** Blink shapes (0 open … 1 shut), frame by frame at 30 fps: they close fast and
- * open slowly. Regular: 2 closing, 1 shut, 4 opening. Long (with a big look,
- * a change of thought): 3 closing, 2 shut, 5 opening. */
+ * open a little slower, and stay short (a blink of 5 frames already reads as
+ * sleepy). Regular: half, shut 2, half, nearly open. Long (with a big look, a
+ * change of thought): 2 closing, 2 shut, 3 opening. */
 export declare const BLINK: number[];
 export declare const LONG_BLINK: number[];
 export interface GazeKey {
@@ -245,7 +246,7 @@ export declare function reactionFrames(kind: Reaction, o?: {
 export declare const REACTION_FRAMES: Record<Reaction, number>;
 /**
  * A loose part following a curve: a damped spring (about 0.55 rad a frame,
- * damping 0.45) pulled toward the curve's value one frame late, stepped frame
+ * damping 0.6: ~10% overshoot, settled in ~8 frames) pulled toward the curve's value one frame late, stepped frame
  * by frame from rest. It lags the body, carries past it, and settles: drag and
  * follow-through. Pure: the same curve gives the same result at any frame.
  */

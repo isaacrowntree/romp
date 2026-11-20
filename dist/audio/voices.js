@@ -129,6 +129,28 @@ export function cartoon(s) {
                 env.gain.linearRampToValueAtTime(v, at + 0.015);
                 env.gain.setValueAtTime(v, at + len * 0.6);
                 env.gain.linearRampToValueAtTime(0, at + len * 0.95);
+                // A third formant for body, vibrato on long syllables (held vowels sing), and a
+                // consonant: a short noise click at the syllable start, so it isn't a buzz.
+                const c3 = s.filter("bandpass", 2600 * fk, 10), g3 = s.gain(0.3);
+                src.connect(c3).connect(g3).connect(env);
+                if (len > 0.15) {
+                    const lfo = ctx.createOscillator();
+                    lfo.frequency.value = 5.5;
+                    const depth = ctx.createGain();
+                    depth.gain.setValueAtTime(0, at);
+                    depth.gain.linearRampToValueAtTime(f * 0.025, at + len * 0.6);
+                    lfo.connect(depth).connect(src.frequency);
+                    lfo.start(at);
+                    lfo.stop(at + len + 0.02);
+                }
+                if (sy.onset) {
+                    const n = s.noiseSrc(at - 0.005, 0.02, seed + i), bp = s.filter("bandpass", (/[sz]$/.test(sy.onset) ? 5200 : /[td]$/.test(sy.onset) ? 3800 : 2800) * fk, 2);
+                    const ng = ctx.createGain();
+                    ng.gain.setValueAtTime(0, at - 0.005);
+                    ng.gain.linearRampToValueAtTime(v * 0.3, at);
+                    ng.gain.linearRampToValueAtTime(0, at + 0.018);
+                    n.connect(bp).connect(ng).connect(p);
+                }
                 src.connect(a).connect(ga).connect(env);
                 src.connect(b).connect(gb).connect(env);
                 env.connect(p);

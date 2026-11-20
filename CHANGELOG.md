@@ -3,6 +3,25 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.14.0] — 2026-11-20
+
+A second round of five reviews (fluidity 7/10, faces 6.5, acting 6, a fresh
+viewer 6, and a sound-design pass) found the follow-through now too loose,
+blinks too long, and voices too thin.
+
+### Changed
+- `follow()` damping 0.45 → 0.6 (about 10% overshoot, settled in ~8 frames);
+  `react("surprise")` keeps the hat on the head (tilt ±12°, lift ≤ 4).
+- The smear in-between of a hard take is half-way in height too (it was
+  already at full stretch, so the pop still read as one frame).
+- `BLINK` is 5 frames (half, shut 2, half, nearly open) and `LONG_BLINK` 7;
+  double blinks 10% of the time (was 20%).
+- `jump()`: the hat is pressed down on the way up and floats on the way down
+  (drag, not lead); landings are softer (strength ≤ 1).
+- `babble({ syllables })`: a third formant, vibrato on syllables longer than
+  0.15 s, and a short consonant click (noise, tuned by the onset: s/z bright,
+  t/d mid, others lower) at every syllable with an onset.
+
 ## [0.13.0] — 2026-11-20
 
 Voices with intention. Gibberish voices are understood by the melody of their
