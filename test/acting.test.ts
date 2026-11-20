@@ -320,3 +320,12 @@ describe("voice melody (0.13)", () => {
     expect(p[i].st0).toBeGreaterThan(p[i + 1].st0);
   });
 });
+
+describe("nod (0.15)", () => {
+  it("dips the face, not the body", () => {
+    const r = react(8, 0, "nod");
+    expect(r.faceY ?? 0).toBeGreaterThan(0.4);
+    expect(Math.abs(r.pose.squashY - 1)).toBeLessThan(0.05);
+    expect(react(1, 0, "nod").faceY ?? 0).toBeLessThan(0); // the lift first
+  });
+});

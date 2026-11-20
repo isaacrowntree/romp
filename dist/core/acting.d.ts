@@ -235,6 +235,8 @@ export interface Reacting {
     contact: boolean;
     /** eye size (1 = as drawn): wide with surprise */
     eyeScale?: number;
+    /** -1 … 1: the face tipping up or down on the body (a nod looks down) */
+    faceY?: number;
     /** finished (back to idle) */
     done: boolean;
 }

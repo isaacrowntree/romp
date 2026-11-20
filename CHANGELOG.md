@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.15.0] — 2026-11-20
+
+### Changed
+- `react("nod")`: the face goes down and up (`faceY` on the result, a new
+  field), the second dip smaller, eyes half-closing at the bottom, the hat
+  tipping with it; the body barely squashes (a squash read as a hop).
+
+### Added
+- `Reacting.faceY`: the face tipping up or down on the body.
+
 ## [0.14.0] — 2026-11-20
 
 A second round of five reviews (fluidity 7/10, faces 6.5, acting 6, a fresh

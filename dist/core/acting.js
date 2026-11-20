@@ -503,13 +503,16 @@ export function react(frame, at, kind, o = {}) {
         return { y: -0.015 * k * Math.abs(b), pose: { ...i, squashY: sy, squashX: keepVolume(sy), tilt: 4 * k * Math.sin(dt * 0.8) * fade, blink: 0.65 }, mouth: "open", contact: false, done };
     }
     if (kind === "nod") {
-        // A small lift (the anticipation), then two dips forward.
+        // A nod on a front-facing body is the face going down and up: a small lift
+        // first (the anticipation), then two dips, the second smaller, the eyes
+        // half-closing at the bottom, the hat tipping with the head. The body
+        // itself barely squashes (a squash reads as a hop).
         if (dt < 3)
-            return { y: -0.005 * k, pose: { ...i, tilt: i.tilt - 3 * k * smooth(dt / 3) }, contact: false, done };
+            return { y: 0, pose: { ...i, tilt: i.tilt - 2 * smooth(dt / 3) }, faceY: -0.25 * k * smooth(dt / 3), contact: false, done };
         const u = (dt - 3) / (REACTION_FRAMES.nod - 3);
-        const dip = Math.sin(Math.PI * 2 * u) ** 2 * (1 - 0.4 * u);
-        const sy = i.squashY - 0.06 * k * dip;
-        return { y: 0.01 * k * dip, pose: { ...i, squashY: sy, squashX: keepVolume(sy), tilt: i.tilt + 7 * k * dip, blink: dip > 0.6 ? 0.4 : i.blink }, contact: false, done };
+        const dip = Math.sin(Math.PI * 2 * u) ** 2 * (u < 0.5 ? 1 : 0.6);
+        const sy = i.squashY - 0.015 * k * dip;
+        return { y: 0, pose: { ...i, squashY: sy, squashX: keepVolume(sy), tilt: i.tilt + 4 * k * dip, lift: -1.5 * k * dip, blink: dip > 0.55 ? 0.55 : i.blink }, faceY: 0.8 * k * dip, contact: false, done };
     }
     // shake
     const fade = 1 - dt / REACTION_FRAMES.shake;
